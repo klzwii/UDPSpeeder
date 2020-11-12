@@ -1,0 +1,26 @@
+#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+C:/Users/liuze/CLionProjects/UDPSpeeder/RSHelper.cpp
+RSHelper.h
+C:/Users/liuze/CLionProjects/UDPSpeeder/RSHelper.h
+
+C:/Users/liuze/CLionProjects/UDPSpeeder/RSHelper.h
+iostream
+-
+
+C:/Users/liuze/CLionProjects/UDPSpeeder/UDPSpeeder.cpp
+RSHelper.h
+C:/Users/liuze/CLionProjects/UDPSpeeder/RSHelper.h
+ctime
+-
+iostream
+-
+random
+-
+
