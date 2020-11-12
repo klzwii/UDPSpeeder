@@ -1,3 +1,0 @@
-C:/Users/liuze/CLionProjects/UDPSpeeder/cmake-build-release/CMakeFiles/UDPSpeeder.dir
-C:/Users/liuze/CLionProjects/UDPSpeeder/cmake-build-release/CMakeFiles/edit_cache.dir
-C:/Users/liuze/CLionProjects/UDPSpeeder/cmake-build-release/CMakeFiles/rebuild_cache.dir
