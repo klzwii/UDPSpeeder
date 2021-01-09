@@ -20,8 +20,8 @@ int RSHelper::currentRSCodeLength = -1;
  */
 void RSHelper::generateGeneratorPolynomial(int polynomialLength) {
     memset(generatorPolynomial, 0, sizeof(generatorPolynomial));
-    generatorPolynomial[0] = 1;
-    generatorPolynomial[1] = 25;
+    generatorPolynomial[0] = field2num[2];
+    generatorPolynomial[1] = field2num[3];
     for (int i = 3; i <= polynomialLength; i++) {
         memset(generatorPolynomialTemp, 0, sizeof(generatorPolynomialTemp));
         generatorPolynomialTemp[0] = generatorPolynomial[0] + (i - 1);
@@ -30,8 +30,6 @@ void RSHelper::generateGeneratorPolynomial(int polynomialLength) {
         }
         for (int j = 1; j < i; j++) {
             generatorPolynomialTemp[i - j] = generatorPolynomial[i - 1 - j];
-        }
-        for (int j = i; j >= 0; j--) {
         }
         for (int j = 1; j < i; j++) {
             int temp = generatorPolynomial[j] + i - 1;
@@ -43,6 +41,9 @@ void RSHelper::generateGeneratorPolynomial(int polynomialLength) {
             generatorPolynomialTemp[j] = field2num[temp];
         }
         std::swap(generatorPolynomial, generatorPolynomialTemp);
+    }
+    for (int i = polynomialLength; i >= 0; i --) {
+        std::cout << num2field[generatorPolynomial[i]] << ",";
     }
 }
 

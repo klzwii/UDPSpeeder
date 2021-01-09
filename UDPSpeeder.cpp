@@ -7,7 +7,7 @@ int main() {
     RSHelper k;
     int message[256];
     int messageCopy[256];
-    int messageLength = 128, rsCodeLength = 127;
+    int messageLength = 129, rsCodeLength = 126;
     int lun = 0;
     while (true) {
         if (lun == 1000) {
@@ -31,6 +31,10 @@ int main() {
 
         if (!k.getOriginMessage(message, messageLength, rsCodeLength)) {
             std::cout << "wrong";
+            std::cout << std::endl;
+            for (int i = messageLength + rsCodeLength - 1; i >= rsCodeLength; i --) {
+                std::cout << message[i] << ",";
+            }
             std::cout << std::endl;
             for (int i = 0; i < messageLength + rsCodeLength; i++) {
                 std::cout << message[i] << ",";
