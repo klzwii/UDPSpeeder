@@ -5,21 +5,21 @@
 #ifndef UDPSPEEDER_RSHELPER_H
 #define UDPSPEEDER_RSHELPER_H
 #include <iostream>
+#define gwSize 4096
 
 class RSHelper {
 private:
-    static unsigned short num2field[256];
-    static unsigned short field2num[256];
-    static int generatorPolynomial[256];
-    static int generatorPolynomialTemp[256];
+    static int num2field[4096];
+    static int field2num[4096];
+    static int generatorPolynomial[4096];
+    static int generatorPolynomialTemp[4096];
     static int currentRSCodeLength;
-    static void generateGeneratorPolynomial(unsigned short polynomialLength);
+    static void generateGeneratorPolynomial(int polynomialLength);
 
 public:
-    void attachRSCode(int *originMessage, unsigned short messageLength,
-                      unsigned short rsCodeLength);
-    bool getOriginMessage(int *message, unsigned short messageLength,
-                          unsigned short rsCodeLength);
+    void attachRSCode(int *originMessage, int messageLength, int rsCodeLength);
+
+    bool getOriginMessage(int *message, int messageLength, int rsCodeLength);
 };
 
 #endif //UDPSPEEDER_RSHELPER_H

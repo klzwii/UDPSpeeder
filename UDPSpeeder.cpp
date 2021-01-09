@@ -2,7 +2,6 @@
 #include <ctime>
 #include <iostream>
 #include <random>
-
 int main() {
     std::srand(std::time(NULL));
     RSHelper k;
@@ -41,6 +40,7 @@ int main() {
                 std::cout << messageCopy[i] << ",";
             }
             std::cout << std::endl;
+
             break;
         }
     }
