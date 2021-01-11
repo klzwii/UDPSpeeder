@@ -4,20 +4,26 @@
 #include <random>
 #include <thread>
 void test();
-std::mt19937 g1(time(NULL));
+std::mt19937 g1(time(nullptr));
+bool isStart = false;
 int main() {
     RSHelper::init();
+    for (int i = 0; i < 8; i ++) {
+        std::thread(test).detach();
+    }
+    isStart = true;
+    while (true) {
 
+    }
 }
 void test() {
    // freopen("test.txt", "w", stdout);
     RSHelper k;
     int message[gwSize];
     int messageCopy[gwSize];
-    int messageLength = g1() % gwSize, rsCodeLength = gwSize - 1 - messageLength;
     int lun = 0;
     while (true) {
-        messageLength = g1() % (gwSize - 1), rsCodeLength = gwSize - 1 - messageLength;
+        int messageLength = g1() % gwSize, rsCodeLength = gwSize - 1 - messageLength;
         //messageLength = gwSize - 1, rsCodeLength = 0;
         if (lun == 10) {
             lun = 0;
@@ -39,7 +45,7 @@ void test() {
             c--;
         }
 
-        if (!k.getOriginMessage(message, messageLength, rsCodeLength)) {
+        if (!RSHelper::getOriginMessage(message, messageLength, rsCodeLength)) {
             std::cout << "wrong";
             std::cout << rsCodeLength << " " << messageLength << std::endl;
             std::cout << std::endl;

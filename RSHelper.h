@@ -14,7 +14,7 @@ private:
     int generatorPolynomial[gwSize + 1];
     int generatorPolynomialTemp[gwSize + 1];
     int currentRSCodeLength;
-
+    static void work(int k, int *workArray, int po);
 
 public:
     void attachRSCode(int *originMessage, int messageLength, int rsCodeLength);
@@ -23,6 +23,8 @@ public:
     static void init();
     RSHelper();
     int testFunc(int a, int b);
+
+
 };
 
 #endif //UDPSPEEDER_RSHELPER_H
