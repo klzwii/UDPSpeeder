@@ -3,4 +3,4 @@ project(UDPSpeeder)
 
 set(CMAKE_CXX_STANDARD 14)
 
-add_executable(UDPSpeeder UDPSpeeder.cpp RSHelper.cpp RSHelper.h PackageSplitHelper.cpp PackageSplitHelper.h)
+add_executable(UDPSpeeder UDPSpeeder.cpp RSHelper.cpp RSHelper.h PackageSplitHelper.cpp PackageSplitHelper.h SimpleWorker.h SimpleTask.h SimpleWorkQueue.cpp SimpleWorkQueue.h)

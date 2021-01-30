@@ -7,7 +7,7 @@
 
 
 class PackageSplitHelper {
-
+    private int
 };
 
 
