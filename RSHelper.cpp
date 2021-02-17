@@ -3,6 +3,7 @@
 //
 
 #include "RSHelper.h"
+#include <cstring>
 
 //G(2^8) log2num
 int RSHelper::num2field[gwSize];
@@ -29,6 +30,7 @@ const static int primitivePolynomial[14][14] = {
         {1, 1, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 1},
         {1, 1, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1}
 };
+
 void RSHelper::generateGeneratorPolynomial(int polynomialLength) {
     memset(generatorPolynomial, 0, sizeof(generatorPolynomial));
     generatorPolynomial[0] = field2num[1];
@@ -49,18 +51,14 @@ void RSHelper::generateGeneratorPolynomial(int polynomialLength) {
         }
         std::swap(generatorPolynomial, generatorPolynomialTemp);
     }
-//    for (int i = polynomialLength; i >= 0; i --) {
-//        std::cout << num2field[generatorPolynomial[i]] << ",";
-//    }
-//    std::cout << std::endl;
 }
 
 /*
  * 在原始信息的头部附加对应的rs纠错码 如信息长度为3纠错码长度为2则传入数组应为BBXXX(其中B为空字符,X为原始信息)
  * 在函数运行结束后原数组变为SSXXX(S为rs纠错码)
  * @param originMessage 原始信息所保存的数组指针 需要在前端预留出填充纠错码的位置
- * @param messageLength 原始的信息长度 需要注意messageLength + rsCodeLength需要严格小于等于255
- * @param rsCodeLength 纠错码的长度 需要注意messageLength + rsCodeLength需要严格小于等于255
+ * @param messageLength 原始的信息长度 需要注意messageLength + rsCodeLength需要严格小于等于2^gwSize - 1
+ * @param rsCodeLength 纠错码的长度 需要注意messageLength + rsCodeLength需要严格小于等于2^gwSize - 1
  */
 void RSHelper::attachRSCode(int *originMessage, int messageLength, int rsCodeLength) {
     int tempPolynomial[gwSize];
@@ -91,13 +89,12 @@ void RSHelper::attachRSCode(int *originMessage, int messageLength, int rsCodeLen
 /*
  * 将通过attachRSCode函数产生的带有纠错码并且出错数目少于rsCodeLength>>1的信息还原成原本的信息
  * @param message 需要进行还原的带有纠错码的信息
- * @param messageLength 原始的信息长度 需要注意messageLength + rsCodeLength需要严格小于等于255
- * @param rsCodeLength 纠错码的长度 需要注意messageLength + rsCodeLength需要严格小于等于255
+ * @param messageLength 原始的信息长度 需要注意messageLength + rsCodeLength需要严格小于等于2^gwSize - 1
+ * @param rsCodeLength 纠错码的长度 需要注意messageLength + rsCodeLength需要严格小于等于2^gwSize - 1
  * @return bool true则为信息已被恢复 false则代表信息错误数过多 无法恢复
  */
 bool RSHelper::getOriginMessage(int *message, int messageLength, int rsCodeLength) {
-
-    int polynomialValue[gwSize];
+    thread_local int polynomialValue[gwSize];
     thread_local int solveMatrix[gwSize][gwSize];
     int isCorrect = 0;
     for (int i = 0; i < rsCodeLength; i++) {
@@ -349,14 +346,23 @@ bool RSHelper::getOriginMessage(int *message, int messageLength, int rsCodeLengt
     return true;
 }
 
-int RSHelper::testFunc(int a, int b) {
-    return num2field[(field2num[a] + field2num[b]) % (gwSize - 1)];
-}
-
 RSHelper::RSHelper() {
     currentRSCodeLength = - 1;
     memset(generatorPolynomial, 0, sizeof(generatorPolynomial));
     memset(generatorPolynomialTemp, 0, sizeof(generatorPolynomialTemp));
+    static_assert((gwSize & (-gwSize)) == gwSize, "not 2 pow");
+    static_assert(gwSize <= 8192, "too big");
+    static_assert(gwSize >= 4, "too small");
+    int k = gwSize, po = 0;
+    while (k) {
+        ++po;
+        k = k >> 1;
+    }
+    --po;
+    int workArray[gwSize];
+    for (int i = 0; i < gwSize; i++) {
+        work(i, workArray, po);
+    }
 }
 
 void RSHelper::work(int k, int* workArray, int po) {
@@ -378,22 +384,6 @@ void RSHelper::work(int k, int* workArray, int po) {
     }
     RSHelper::num2field[k] = sum;
     field2num[sum] = k;
-}
-
-void RSHelper::init() {
-    static_assert((gwSize & (-gwSize)) == gwSize, "not 2 pow");
-    static_assert(gwSize <= 8192, "too big");
-    static_assert(gwSize >= 4, "too small");
-    int k = gwSize, po = 0;
-    while (k) {
-        ++po;
-        k = k >> 1;
-    }
-    --po;
-    int workArray[gwSize];
-    for (int i = 0; i < gwSize; i++) {
-        work(i, workArray, po);
-    }
 }
 
 

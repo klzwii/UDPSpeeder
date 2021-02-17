@@ -15,14 +15,12 @@ private:
     int generatorPolynomialTemp[gwSize + 1];
     int currentRSCodeLength;
     static void work(int k, int *workArray, int po);
+    void generateGeneratorPolynomial(int polynomialLength);
 
 public:
     void attachRSCode(int *originMessage, int messageLength, int rsCodeLength);
-    void generateGeneratorPolynomial(int polynomialLength);
     static bool getOriginMessage(int *message, int messageLength, int rsCodeLength);
-    static void init();
     RSHelper();
-    int testFunc(int a, int b);
 
 
 };

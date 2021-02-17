@@ -1,0 +1,40 @@
+#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+/tmp/tmp.TVgIVgYPOD/SimpleTask.h
+
+/tmp/tmp.TVgIVgYPOD/SimpleWorkQueue.cpp
+SimpleWorkQueue.h
+/tmp/tmp.TVgIVgYPOD/SimpleWorkQueue.h
+atomic
+-
+linux/module.h
+-
+cstring
+-
+iostream
+-
+
+/tmp/tmp.TVgIVgYPOD/SimpleWorkQueue.h
+SimpleWorker.h
+/tmp/tmp.TVgIVgYPOD/SimpleWorker.h
+thread
+-
+atomic
+-
+queue
+-
+mutex
+-
+condition_variable
+-
+
+/tmp/tmp.TVgIVgYPOD/SimpleWorker.h
+SimpleTask.h
+/tmp/tmp.TVgIVgYPOD/SimpleTask.h
+

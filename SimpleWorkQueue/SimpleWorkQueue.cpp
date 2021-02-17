@@ -3,38 +3,44 @@
 //
 
 #include "SimpleWorkQueue.h"
-#include <atomic>
+#include <iostream>
 
 const SimpleTask* SimpleWorkQueue::finishTask = new SimpleTask();
 
 SimpleWorkQueue::SimpleWorkQueue(int workerSize, SimpleWorker **simpleWorkers) {
+    std::cout << "init start" << std::endl;
     finished = false;
-    workers = reinterpret_cast<SimpleWorker **>(workerSize * sizeof(SimpleWorker*));
-    memcpy(workers, simpleWorkers, workerSize * sizeof(SimpleWorker*));
     this->workerSize = workerSize;
+    queue = new SimpleThreadsSafeQueue();
+    for (int i = 0; i < workerSize; i ++) {
+        std::thread t1(simpleWorkFunc, simpleWorkers[i], queue);
+        t1.detach();
+    }
 }
 
-void SimpleWorkQueue::simpleWorkFunc(SimpleWorker *simpleWorker, SimpleThreadSafeQueue* queue) {
+void SimpleWorkQueue::simpleWorkFunc(SimpleWorker *simpleWorker, SimpleThreadsSafeQueue* queue) {
     while (true) {
         SimpleTask *task = queue->offer();
+        std::cout << "get task from queue" << std::endl;
         if (task == finishTask) {
             break;
         }
         simpleWorker->work(task);
     }
+    std::cout << "thread finished" << std::endl;
 }
 
 void SimpleWorkQueue::submitTask(SimpleTask *task) {
     if (finished) {
         return;
     }
-    submitTask(task);
+    queue->push(task);
 }
 
 void SimpleWorkQueue::finish() {
     finished.store(true);
     for (int i = 0; i < workerSize; i ++) {
-        queue.push(finishTask);
+        queue->push(finishTask);
     }
 }
 

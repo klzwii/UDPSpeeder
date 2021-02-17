@@ -15,44 +15,35 @@
 
 class SimpleWorkQueue {
 private:
-    class SimpleThreadSafeQueue {
+    class SimpleThreadsSafeQueue {
     private:
         std::queue<SimpleTask*>que;
         std::mutex mMutex;
         std::condition_variable mCondVar;
-        std::unique_lock<std::mutex>* uniqueLock;
     public:
-        SimpleThreadSafeQueue() {
-            uniqueLock = new std::unique_lock<std::mutex>(mMutex, std::defer_lock);
-        }
         SimpleTask* offer() {
-            uniqueLock->lock();
+            std::unique_lock <std::mutex> uniqueLock(mMutex);
             while(que.empty()) {
-                mCondVar.wait(*uniqueLock);
+                mCondVar.wait(uniqueLock);
             }
             auto ret = que.front();
             que.pop();
-            uniqueLock->release();
             return ret;
         }
         void push(const SimpleTask* task) {
-            uniqueLock->lock();
+            std::unique_lock <std::mutex> uniqueLock(mMutex);
             que.push(const_cast<SimpleTask *>(task));
             if (que.size() == 1) {
                 mCondVar.notify_all();
             }
-            uniqueLock->unlock();
-        }
-        ~ SimpleThreadSafeQueue() {
-            delete(uniqueLock);
         }
     };
     SimpleWorker **workers{};
     unsigned int workerSize;
     const static SimpleTask *finishTask;
     std::atomic<bool>finished{};
-    static void simpleWorkFunc(SimpleWorker *simpleWorker, SimpleThreadSafeQueue* queue);
-    SimpleThreadSafeQueue queue;
+    static void simpleWorkFunc(SimpleWorker *simpleWorker, SimpleThreadsSafeQueue* queue);
+    SimpleThreadsSafeQueue *queue;
 public:
     SimpleWorkQueue(int workerSize, SimpleWorker** simpleWorkers);
     void submitTask(SimpleTask *task);
