@@ -1,3 +1,0 @@
-/tmp/tmp.TVgIVgYPOD/cmake-build-linux/CMakeFiles/rebuild_cache.dir
-/tmp/tmp.TVgIVgYPOD/cmake-build-linux/CMakeFiles/UDPSpeeder.dir
-/tmp/tmp.TVgIVgYPOD/cmake-build-linux/CMakeFiles/edit_cache.dir
