@@ -25,11 +25,6 @@ int main(){
     std::cout << "test worker success" << std::endl;
     auto threadPool = new SimpleWorkQueue(workerSize, workerArray);
     std::cout << "init thread pool success" << std::endl;
-    for (int i = 0; i < 100; i ++) {
-        auto k = new PackageProcessTask();
-        k->call = i;
-        threadPool->submitTask(k);
-    }
     threadPool->finish();
     while (true) {
 

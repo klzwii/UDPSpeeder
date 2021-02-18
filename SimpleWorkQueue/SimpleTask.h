@@ -8,7 +8,7 @@
 
 class SimpleTask {
 public:
-    virtual ~SimpleTask()= default;;
+    virtual ~SimpleTask()= default;
 };
 
 

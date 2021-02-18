@@ -8,7 +8,6 @@
 const SimpleTask* SimpleWorkQueue::finishTask = new SimpleTask();
 
 SimpleWorkQueue::SimpleWorkQueue(int workerSize, SimpleWorker **simpleWorkers) {
-    std::cout << "init start" << std::endl;
     finished = false;
     this->workerSize = workerSize;
     queue = new SimpleThreadsSafeQueue();
@@ -21,13 +20,11 @@ SimpleWorkQueue::SimpleWorkQueue(int workerSize, SimpleWorker **simpleWorkers) {
 void SimpleWorkQueue::simpleWorkFunc(SimpleWorker *simpleWorker, SimpleThreadsSafeQueue* queue) {
     while (true) {
         SimpleTask *task = queue->offer();
-        std::cout << "get task from queue" << std::endl;
         if (task == finishTask) {
             break;
         }
         simpleWorker->work(task);
     }
-    std::cout << "thread finished" << std::endl;
 }
 
 void SimpleWorkQueue::submitTask(SimpleTask *task) {

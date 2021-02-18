@@ -7,10 +7,12 @@
 
 
 #include "../SimpleWorkQueue/SimpleTask.h"
+#include "../RSHelper.h"
 
 class PackageProcessTask : public SimpleTask {
 public:
-    int call;
+    char* bytes{};
+    int length;
 };
 
 

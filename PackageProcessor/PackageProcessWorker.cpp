@@ -5,12 +5,14 @@
 #include "PackageProcessWorker.h"
 #include "PackageProcessTask.h"
 #include <iostream>
-#include <thread>
-#include <random>
-#include <chrono>
 
 void PackageProcessWorker::work(SimpleTask *task) {
     auto packageTask = dynamic_cast<PackageProcessTask*>(task);
-    std::cout << packageTask->call << std::endl;
+    char *temp = packageTask->bytes;
+    helper->attachRSCode(reinterpret_cast<char *>(temp), 3000, 1000);
     free(packageTask);
+}
+
+PackageProcessWorker::PackageProcessWorker() {
+    helper = new RSHelper();
 }

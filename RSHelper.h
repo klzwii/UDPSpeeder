@@ -18,8 +18,8 @@ private:
     void generateGeneratorPolynomial(int polynomialLength);
 
 public:
-    void attachRSCode(int *originMessage, int messageLength, int rsCodeLength);
-    static bool getOriginMessage(int *message, int messageLength, int rsCodeLength);
+    void attachRSCode(char *originMessage, int messageLength, int rsCodeLength);
+    static bool getOriginMessage(char *message, int messageLength, int rsCodeLength);
     RSHelper();
 
 

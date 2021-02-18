@@ -1,2 +1,5 @@
 /cmake-build-debug/
 /cmake-build-release/
+/cmake-build-linux/
+/cmake-build-linux-agent/
+/.idea/

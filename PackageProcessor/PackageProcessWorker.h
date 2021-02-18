@@ -7,9 +7,14 @@
 
 
 #include "../SimpleWorkQueue/SimpleWorker.h"
+#include "../RSHelper.h"
 
 class PackageProcessWorker : public SimpleWorker {
+public:
     void work(SimpleTask* task) override;
+    PackageProcessWorker();
+private:
+    RSHelper *helper;
 };
 
 
