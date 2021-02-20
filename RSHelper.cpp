@@ -33,7 +33,7 @@ const static int primitivePolynomial[14][14] = {
         {1, 1, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1}
 };
 
-inline int getPos(int pos, unsigned char* bytes) {
+unsigned RSHelper::getPos(int pos, unsigned char* bytes) {
     unsigned temp = 0;
     memcpy(&temp, bytes + (pos >> 1) * 3 + (pos & 1) , 2);
     if(!(pos&1)) {
@@ -41,10 +41,10 @@ inline int getPos(int pos, unsigned char* bytes) {
     } else {
         temp >>= 4;
     }
-    return (int)temp;
+    return temp;
 }
 
-inline void setPos(int pos, unsigned char* bytes, unsigned int value) {
+void RSHelper::setPos(int pos, unsigned char* bytes, unsigned int value) {
     auto tempPos = (unsigned int*)(bytes + (pos >> 1) * 3 + (pos & 1));
     if(!(pos&1)) {
         *tempPos &= reserveHighBits;
@@ -87,7 +87,7 @@ void RSHelper::generateGeneratorPolynomial(int polynomialLength) {
  * @param messageLength 原始的信息长度 需要注意messageLength + rsCodeLength需要严格小于等于2^gwSize - 1
  * @param rsCodeLength 纠错码的长度 需要注意messageLength + rsCodeLength需要严格小于等于2^gwSize - 1
  */
-void RSHelper::attachRSCode(char *originMessage, int messageLength, int rsCodeLength) {
+void RSHelper::attachRSCode(unsigned char *originMessage, int messageLength, int rsCodeLength) {
     int tempPolynomial[gwSize];
     memset(tempPolynomial, 0, sizeof(tempPolynomial));
     if (rsCodeLength != currentRSCodeLength) {
@@ -95,7 +95,7 @@ void RSHelper::attachRSCode(char *originMessage, int messageLength, int rsCodeLe
         generateGeneratorPolynomial(rsCodeLength);
     }
     for (int i = 0; i < messageLength; i++) {
-        tempPolynomial[i + rsCodeLength] = getPos(i + rsCodeLength, reinterpret_cast<unsigned char *>(originMessage));
+        tempPolynomial[i + rsCodeLength] = getPos(i + rsCodeLength, originMessage);
     }
     for (int i = messageLength + rsCodeLength; i >= rsCodeLength; i--) {
         if (tempPolynomial[i]) {
@@ -109,7 +109,7 @@ void RSHelper::attachRSCode(char *originMessage, int messageLength, int rsCodeLe
         }
     }
     for (int i = 0; i < rsCodeLength; i++) {
-        setPos(i, reinterpret_cast<unsigned char *>(originMessage), tempPolynomial[i]);
+        setPos(i, originMessage, tempPolynomial[i]);
     }
 }
 
@@ -120,17 +120,17 @@ void RSHelper::attachRSCode(char *originMessage, int messageLength, int rsCodeLe
  * @param rsCodeLength 纠错码的长度 需要注意messageLength + rsCodeLength需要严格小于等于2^gwSize - 1
  * @return bool true则为信息已被恢复 false则代表信息错误数过多 无法恢复
  */
-bool RSHelper::getOriginMessage(char *message, int messageLength, int rsCodeLength) {
+bool RSHelper::getOriginMessage(unsigned char *message, int messageLength, int rsCodeLength) {
     thread_local int polynomialValue[gwSize];
     thread_local int solveMatrix[gwSize][gwSize];
     int isCorrect = 0;
     for (int i = 0; i < rsCodeLength; i++) {
         int tempAns = 0;
         for (int j = rsCodeLength + messageLength - 1; j >= 0; j--) {
-            if (!getPos(j, reinterpret_cast<unsigned char *>(message))) {
+            if (!getPos(j, message)) {
                 continue;
             }
-            int tempAlpha = (j * i) + field2num[getPos(j, reinterpret_cast<unsigned char *>(message))];
+            int tempAlpha = (j * i) + field2num[getPos(j, message)];
             tempAlpha %= (gwSize - 1);
             tempAns ^= num2field[tempAlpha];
         }
@@ -350,17 +350,17 @@ bool RSHelper::getOriginMessage(char *message, int messageLength, int rsCodeLeng
     }
     // 高斯消元法结束 将传入消息进行错误恢复
     for (int i = 0; i < sumWrongPos; i++) {
-        auto temp = getPos(wrongPos[i], reinterpret_cast<unsigned char *>(message)) ^gaussAns[i];
-        setPos(wrongPos[i], reinterpret_cast<unsigned char *>(message), temp);
+        auto temp = getPos(wrongPos[i], message) ^gaussAns[i];
+        setPos(wrongPos[i], message, temp);
     }
     // 验证消息是否正确恢复
     for (int i = 0; i < rsCodeLength; i++) {
         int tempAns = 0;
         for (int j = rsCodeLength + messageLength - 1; j >= 0; j--) {
-            if (!getPos(j, reinterpret_cast<unsigned char *>(message))) {
+            if (!getPos(j, message)) {
                 continue;
             }
-            int tempAlpha = (j * i) + field2num[getPos(j, reinterpret_cast<unsigned char *>(message))];
+            int tempAlpha = (j * i) + field2num[getPos(j, message)];
             tempAlpha %= (gwSize - 1);
             tempAns ^= num2field[tempAlpha];
         }

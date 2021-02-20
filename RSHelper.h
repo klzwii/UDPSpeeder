@@ -6,6 +6,7 @@
 #define UDPSPEEDER_RSHELPER_H
 #include <iostream>
 #define gwSize 4096
+#define codeLength 12
 
 class RSHelper {
 private:
@@ -18,11 +19,12 @@ private:
     void generateGeneratorPolynomial(int polynomialLength);
 
 public:
-    void attachRSCode(char *originMessage, int messageLength, int rsCodeLength);
-    static bool getOriginMessage(char *message, int messageLength, int rsCodeLength);
+    static bool getOriginMessage(unsigned char *message, int messageLength, int rsCodeLength);
     RSHelper();
+    static void setPos(int pos, unsigned char *bytes, unsigned int value);
+    static unsigned getPos(int pos, unsigned char *bytes);
 
-
+    void attachRSCode(unsigned char *originMessage, int messageLength, int rsCodeLength);
 };
 
 #endif //UDPSPEEDER_RSHELPER_H

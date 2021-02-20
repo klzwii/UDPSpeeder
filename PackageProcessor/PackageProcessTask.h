@@ -11,8 +11,18 @@
 
 class PackageProcessTask : public SimpleTask {
 public:
-    char* bytes{};
-    int length;
+    unsigned char * bytes{};
+    int messageLength, rsCodeLength;
+    bool isAttach;
+    PackageProcessTask(unsigned char* message, int messageLength, int rsCodeLength, bool isAttach) {
+        this->bytes = message;
+        this->messageLength = messageLength;
+        this->rsCodeLength = rsCodeLength;
+        this->isAttach = isAttach;
+    };
+    ~PackageProcessTask() override {
+        free(bytes);
+    }
 };
 
 
