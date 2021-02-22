@@ -14,7 +14,7 @@
 #include <condition_variable>
 
 class SimpleWorkQueue {
-private:
+public:
     class SimpleThreadsSafeQueue {
     private:
         std::queue<SimpleTask*>que;
@@ -38,16 +38,17 @@ private:
             }
         }
     };
+    SimpleWorkQueue(int workerSize, SimpleWorker** simpleWorkers);
+    void submitTask(SimpleTask *task);
+    void finish();
+private:
     SimpleWorker **workers{};
     unsigned int workerSize;
     const static SimpleTask *finishTask;
     std::atomic<bool>finished{};
     static void simpleWorkFunc(SimpleWorker *simpleWorker, SimpleThreadsSafeQueue* queue);
     SimpleThreadsSafeQueue *queue;
-public:
-    SimpleWorkQueue(int workerSize, SimpleWorker** simpleWorkers);
-    void submitTask(SimpleTask *task);
-    void finish();
+
 };
 
 

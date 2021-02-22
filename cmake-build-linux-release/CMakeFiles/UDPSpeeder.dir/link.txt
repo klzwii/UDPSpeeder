@@ -1,0 +1,1 @@
+/usr/bin/c++  -lpthread -O3 -DNDEBUG  -rdynamic CMakeFiles/UDPSpeeder.dir/UDPSpeeder.cpp.o CMakeFiles/UDPSpeeder.dir/RSHelper.cpp.o CMakeFiles/UDPSpeeder.dir/SimpleWorkQueue/SimpleWorkQueue.cpp.o CMakeFiles/UDPSpeeder.dir/PackageProcessor/PackageProcessWorker.cpp.o CMakeFiles/UDPSpeeder.dir/PackageProcessor/PackageProcessTask.cpp.o  -o UDPSpeeder 

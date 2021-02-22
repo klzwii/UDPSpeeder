@@ -6,6 +6,7 @@
 #include "PackageProcessTask.h"
 #include <iostream>
 
+
 void PackageProcessWorker::work(SimpleTask *task) {
     auto packageTask = dynamic_cast<PackageProcessTask*>(task);
     auto temp = packageTask->bytes;

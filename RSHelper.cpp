@@ -10,8 +10,7 @@ int RSHelper::num2field[gwSize];
 //G(2^8) num2log
 int RSHelper::field2num[gwSize];
 
-const unsigned reserveHighBits = 0b11111111111111111111000000000000;
-const unsigned eraseLowBits = 0b11111111111111110000000000001111;
+
 /*
  * 生成reed-solomon纠错算法的生成多项式 保存在generatorPolynomial中
  * @param polynomialLength 表示所需生成的多项式的最高次数项次数
@@ -32,31 +31,6 @@ const static int primitivePolynomial[14][14] = {
         {1, 1, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 1},
         {1, 1, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1}
 };
-
-unsigned RSHelper::getPos(int pos, unsigned char* bytes) {
-    unsigned temp = 0;
-    memcpy(&temp, bytes + (pos >> 1) * 3 + (pos & 1) , 2);
-    if(!(pos&1)) {
-        temp &= 4095;
-    } else {
-        temp >>= 4;
-    }
-    return temp;
-}
-
-void RSHelper::setPos(int pos, unsigned char* bytes, unsigned int value) {
-    auto tempPos = (unsigned int*)(bytes + (pos >> 1) * 3 + (pos & 1));
-    if(!(pos&1)) {
-        *tempPos &= reserveHighBits;
-        value &= ~reserveHighBits;
-        *tempPos ^= value;
-    } else {
-        value &= ~reserveHighBits;
-        value <<= 4;
-        *tempPos &= eraseLowBits;
-        *tempPos ^= value;
-    }
-}
 
 void RSHelper::generateGeneratorPolynomial(int polynomialLength) {
     memset(generatorPolynomial, 0, sizeof(generatorPolynomial));
@@ -88,7 +62,6 @@ void RSHelper::generateGeneratorPolynomial(int polynomialLength) {
  * @param rsCodeLength 纠错码的长度 需要注意messageLength + rsCodeLength需要严格小于等于2^gwSize - 1
  */
 void RSHelper::attachRSCode(unsigned char *originMessage, int messageLength, int rsCodeLength) {
-    int tempPolynomial[gwSize];
     memset(tempPolynomial, 0, sizeof(tempPolynomial));
     if (rsCodeLength != currentRSCodeLength) {
         currentRSCodeLength = rsCodeLength;
@@ -121,8 +94,6 @@ void RSHelper::attachRSCode(unsigned char *originMessage, int messageLength, int
  * @return bool true则为信息已被恢复 false则代表信息错误数过多 无法恢复
  */
 bool RSHelper::getOriginMessage(unsigned char *message, int messageLength, int rsCodeLength) {
-    thread_local int polynomialValue[gwSize];
-    thread_local int solveMatrix[gwSize][gwSize];
     int isCorrect = 0;
     for (int i = 0; i < rsCodeLength; i++) {
         int tempAns = 0;
@@ -256,13 +227,12 @@ bool RSHelper::getOriginMessage(unsigned char *message, int messageLength, int r
             solveMatrix[j][matrixRank] ^= num2field[calcAlpha];
         }
     }
-    int gaussAns[(gwSize >> 1) + 1];
     for (int i = 0; i < matrixRank; i++) {
         gaussAns[i] = solveMatrix[i][matrixRank];
     }
     // 高斯消元法结束 开始通过求得定位多项式进行错误位置求解
     int sumWrongPos = 0;
-    int wrongPos[gwSize >> 1];
+
     for (int i = 0; i < rsCodeLength + messageLength; i++) {
         int calcAns = 1;
         for (int j = 0; j < matrixRank; j++) {
@@ -350,8 +320,7 @@ bool RSHelper::getOriginMessage(unsigned char *message, int messageLength, int r
     }
     // 高斯消元法结束 将传入消息进行错误恢复
     for (int i = 0; i < sumWrongPos; i++) {
-        auto temp = getPos(wrongPos[i], message) ^gaussAns[i];
-        setPos(wrongPos[i], message, temp);
+        xorPos(wrongPos[i], message, gaussAns[i]);
     }
     // 验证消息是否正确恢复
     for (int i = 0; i < rsCodeLength; i++) {

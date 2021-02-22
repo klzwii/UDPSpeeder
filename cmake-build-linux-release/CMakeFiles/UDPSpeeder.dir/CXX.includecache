@@ -1,0 +1,28 @@
+#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+/tmp/tmp.Wr4WX44Ey5/RSHelper.h
+iostream
+-
+cstring
+-
+
+/tmp/tmp.Wr4WX44Ey5/UDPSpeeder.cpp
+RSHelper.h
+/tmp/tmp.Wr4WX44Ey5/RSHelper.h
+ctime
+-
+iostream
+-
+random
+-
+thread
+-
+cstring
+-
+
