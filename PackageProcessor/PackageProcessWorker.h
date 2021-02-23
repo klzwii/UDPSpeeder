@@ -13,7 +13,7 @@
 class PackageProcessWorker : public SimpleWorker {
 public:
     void work(SimpleTask* task) override;
-    PackageProcessWorker(SimpleWorkQueue::SimpleThreadsSafeQueue *queue);
+    PackageProcessWorker();
 private:
     RSHelper *helper;
     SimpleWorkQueue::SimpleThreadsSafeQueue *queue;
