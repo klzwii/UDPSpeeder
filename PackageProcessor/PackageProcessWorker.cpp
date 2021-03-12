@@ -10,7 +10,7 @@
 void PackageProcessWorker::work(SimpleTask *task) {
     auto packageTask = dynamic_cast<PackageProcessTask*>(task);
     auto temp = packageTask->bytes;
-    helper->attachRSCode(temp, 3000, 1000);
+   // helper->attachRSCode(temp, 3000, 1000);
     free(packageTask);
 }
 
