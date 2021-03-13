@@ -5,7 +5,7 @@
 #ifndef UDPSPEEDER_RSHELPER_H
 #define UDPSPEEDER_RSHELPER_H
 #include <iostream>
-#define gwSize 255
+#define gwSize 256
 
 class RSHelper {
 private:
