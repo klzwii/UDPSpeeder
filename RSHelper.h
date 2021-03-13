@@ -15,18 +15,14 @@ private:
     int generatorPolynomialTemp[gwSize + 1];
     int currentRSCodeLength;
     void generateGeneratorPolynomial(int polynomialLength);
+    bool getOriginMessage(unsigned char **packets, int originalLength, int rsLength, int offset, int batchLength);
 
 public:
-    void attachRSCode(int *originMessage, int messageLength, int rsCodeLength);
-    static bool getOriginMessage(int *message, int messageLength, int rsCodeLength);
 
-
-    void generateRSPacket(unsigned char **packets, int originalLength, int rsLength, size_t packetSize);
-
-    bool
-    getOriginMessage1(unsigned char **packets, int originalLength, int rsLength, int offset, int batchLength);
+    void GenerateRSPacket(unsigned char **packets, int originalLength, int rsLength, size_t packetSize);
 
     bool GetOriginMessageFromPackets(unsigned char **packets, int originalLength, int rsLength, size_t packetSize);
+
 };
 
 #endif //UDPSPEEDER_RSHELPER_H
