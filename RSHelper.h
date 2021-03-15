@@ -14,14 +14,16 @@ private:
     int generatorPolynomial[gwSize + 1];
     int generatorPolynomialTemp[gwSize + 1];
     int currentRSCodeLength;
+    int polynomialValue[gwSize];
+    int solveMatrix[gwSize][gwSize];
     void generateGeneratorPolynomial(int polynomialLength);
-    bool getOriginMessage(unsigned char **packets, int originalLength, int rsLength, int offset, int batchLength);
+    bool getOriginMessage(uint8_t **packets, int originalLength, int rsLength, int offset, int batchLength);
 
 public:
 
-    void GenerateRSPacket(unsigned char **packets, int originalLength, int rsLength, size_t packetSize);
+    void GenerateRSPacket(uint8_t **packets, int originalLength, int rsLength, size_t packetSize);
 
-    bool GetOriginMessageFromPackets(unsigned char **packets, int originalLength, int rsLength, size_t packetSize);
+    bool GetOriginMessageFromPackets(uint8_t **packets, int originalLength, int rsLength, size_t packetSize);
 
 };
 

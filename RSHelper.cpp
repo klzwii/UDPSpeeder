@@ -32,7 +32,7 @@ void RSHelper::generateGeneratorPolynomial(int polynomialLength) {
     }
 }
 
-void RSHelper::GenerateRSPacket(unsigned char **packets, int originalLength, int rsLength, size_t packetSize) {
+void RSHelper::GenerateRSPacket(uint8_t **packets, int originalLength, int rsLength, size_t packetSize) {
     unsigned char tempPolynomial[gwSize];
     size_t batchLength = (gwSize - 1) / (originalLength + rsLength);
     int batch = (packetSize - 1) / batchLength + 1;
@@ -67,7 +67,7 @@ void RSHelper::GenerateRSPacket(unsigned char **packets, int originalLength, int
     }
 }
 
-bool RSHelper::GetOriginMessageFromPackets(unsigned char** packets, int originalLength, int rsLength, size_t packetSize) {
+bool RSHelper::GetOriginMessageFromPackets(uint8_t** packets, int originalLength, int rsLength, size_t packetSize) {
     size_t batchLength = (gwSize - 1) / (originalLength + rsLength);
     int batch = (packetSize - 1) / batchLength + 1;
     for (auto currentBatch = 0; currentBatch < batch; currentBatch ++) {
@@ -79,9 +79,7 @@ bool RSHelper::GetOriginMessageFromPackets(unsigned char** packets, int original
     return true;
 }
 
-bool RSHelper::getOriginMessage(unsigned char** packets, int originalLength, int rsLength, int offset, int  batchLength) {
-    thread_local int polynomialValue[gwSize];
-    thread_local int solveMatrix[gwSize][gwSize];
+bool RSHelper::getOriginMessage(uint8_t** packets, int originalLength, int rsLength, int offset, int  batchLength) {
     int isWrong = 0;
     auto rsCodeLength = batchLength * rsLength;
     auto messageLength = batchLength * originalLength;
@@ -129,13 +127,13 @@ bool RSHelper::getOriginMessage(unsigned char** packets, int originalLength, int
                             solveMatrix[i][kk] = num2field[calcAlpha];
                         }
                         for (int kc = k + 1; kc < maxWrongPos; kc++) {
-                            int tempAlpha = field2num[solveMatrix[kc][j]];
+                            int tempBeta = field2num[solveMatrix[kc][j]];
                             if (solveMatrix[kc][j]) {
                                 for (int kk = j; kk < maxWrongPos; kk++) {
                                     if (!solveMatrix[i][kk]) {
                                         continue;
                                     }
-                                    int calcAlpha = field2num[solveMatrix[i][kk]] + tempAlpha;
+                                    int calcAlpha = field2num[solveMatrix[i][kk]] + tempBeta;
                                     calcAlpha %= (gwSize - 1);
                                     solveMatrix[kc][kk] ^= num2field[calcAlpha];
                                 }
@@ -186,11 +184,11 @@ bool RSHelper::getOriginMessage(unsigned char** packets, int originalLength, int
             if (!solveMatrix[j][i]) {
                 continue;
             }
-            int tempAlpha = field2num[solveMatrix[j][i]];
+            int tempBeta = field2num[solveMatrix[j][i]];
             for (int k = i; k <= matrixRank; k++) {
                 int tempFactor = 0;
                 if (solveMatrix[i][k]) {
-                    int calcAlpha = tempAlpha + field2num[solveMatrix[i][k]];
+                    int calcAlpha = tempBeta + field2num[solveMatrix[i][k]];
                     calcAlpha %= (gwSize - 1);
                     tempFactor = num2field[calcAlpha];
                 }
@@ -274,11 +272,11 @@ bool RSHelper::getOriginMessage(unsigned char** packets, int originalLength, int
             if (!solveMatrix[j][i]) {
                 continue;
             }
-            int tempAlpha = field2num[solveMatrix[j][i]];
+            int tempBeta = field2num[solveMatrix[j][i]];
             for (int k = i; k <= matrixRank; k++) {
                 int tempFactor = 0;
                 if (solveMatrix[i][k]) {
-                    int calcAlpha = tempAlpha + field2num[solveMatrix[i][k]];
+                    int calcAlpha = tempBeta + field2num[solveMatrix[i][k]];
                     calcAlpha %= (gwSize - 1);
                     tempFactor = num2field[calcAlpha];
                 }
