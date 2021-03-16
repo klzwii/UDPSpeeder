@@ -37,7 +37,7 @@ int main() {
     auto head = header(buffer);
     bool finished = false;
     fd_set FDSet;
-    timeval tv{0, 10000};
+    timeval tv{0, 1000};
     FD_ZERO(&FDSet);
     FD_SET(listenFD, &FDSet);
     uint8_t finishCount = 0;
@@ -57,28 +57,33 @@ int main() {
                 }
             }
         } else if(FD_ISSET(listenFD, &fdSetCopy)) {
+            sendHead.Clear();
             length = recvfrom(listenFD, buffer, 10000, 0, reinterpret_cast<sockaddr *>(&clientADDR), &clientADDRLen);
             if (length < 0) {
                 perror("recv");
                 continue;
             }
-            sendHead.SetAckSeq(head.SendSeq());
             if (!head.IsFin() && crc32c::Crc32c(buffer + 4, length - 4) != head.CRC()) {
+                std::cout << "crc check failure" << std::endl;
                 continue;
             }
-            uint32_t sendSeq = head.SendSeq();
+            uint16_t sendSeq = head.SendSeq();
             if (head.IsFin() || finished) {
-                if (!finished && !ackSeq.compare_exchange_strong(sendSeq, sendSeq + 1)) {
+                std::cout << sendSeq << std::endl;
+                uint16_t needAck = sendSeq - 1;
+                if (!finished && !ackSeq.compare_exchange_strong( needAck, needAck + 1)) {
+                    std::cout << ackSeq.load() << std::endl;
                     continue;
                 }
                 std::cout << "finished" << head.SendSeq() << std::endl;
-                sendHead.SetFIN(true);
+                sendHead.SetFIN();
                 finishCount = 0;
                 finished = true;
             } else {
                 setData(sendSeq, head.SubSeq(), head.RealSeq(), buffer, head.PacketLength());
             }
             sendHead.SetAckSeq(ackSeq.load());
+            sendHead.SetACK();
             sendto(listenFD, sendBuffer, HEADER_LENGTH, 0,
                    reinterpret_cast<const sockaddr *>(&clientADDR), clientADDRLen);
         }

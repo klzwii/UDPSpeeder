@@ -52,12 +52,11 @@ public:
     void SetHeadStart(uint16_t headStart) {
         *reinterpret_cast<uint16_t*>(addr + 14) = headStart;
     }
-    void SetFIN(bool isSet) {
-        if (isSet) {
-            *reinterpret_cast<uint8_t*>(addr + 11) |= FIN;
-        } else {
-            *reinterpret_cast<uint8_t*>(addr + 11) &= ~FIN;
-        }
+    void SetFIN() {
+        *reinterpret_cast<uint8_t*>(addr + 11) |= FIN;
+    }
+    void SetACK() {
+        *reinterpret_cast<uint8_t*>(addr + 11) |= ACK;
     }
     uint32_t CRC() {
         return *reinterpret_cast<uint32_t*>(addr);
@@ -85,6 +84,9 @@ public:
     }
     bool IsFin() {
         return *reinterpret_cast<uint8_t*>(addr + 11) & FIN;
+    }
+    bool IsACK() {
+        return *reinterpret_cast<uint8_t*>(addr + 11) & ACK;
     }
 };
 #endif //UDPWINCLIENT_HEADERCONST_H
