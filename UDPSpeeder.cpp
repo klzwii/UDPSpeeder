@@ -37,10 +37,11 @@ int main() {
     auto head = header(buffer);
     bool finished = false;
     fd_set FDSet;
-    timeval tv{0, 1000};
+    timeval tv{0, 5000};
     FD_ZERO(&FDSet);
     FD_SET(listenFD, &FDSet);
     uint8_t finishCount = 0;
+    int process = 0;
     while (true) {
         auto fdSetCopy = FDSet;
         auto tvCopy = tv;
@@ -54,6 +55,15 @@ int main() {
                 ++finishCount;
                 if (finishCount == 100) {
                     break;
+                }
+                continue;
+            } else {
+                if (DumpData()) {
+                    sendHead.Clear();
+                    sendHead.SetAckSeq(recvStart.load());
+                    sendHead.SetACK();
+                    sendto(listenFD, sendBuffer, HEADER_LENGTH, 0,
+                           reinterpret_cast<const sockaddr *>(&clientADDR), clientADDRLen);
                 }
             }
         } else if(FD_ISSET(listenFD, &fdSetCopy)) {
@@ -71,8 +81,7 @@ int main() {
             if (head.IsFin() || finished) {
                 std::cout << sendSeq << std::endl;
                 uint16_t needAck = sendSeq - 1;
-                if (!finished && !ackSeq.compare_exchange_strong( needAck, needAck + 1)) {
-                    std::cout << ackSeq.load() << std::endl;
+                if (!finished && !recvStart.compare_exchange_strong(needAck, needAck + 1)) {
                     continue;
                 }
                 std::cout << "finished" << head.SendSeq() << std::endl;
@@ -81,12 +90,17 @@ int main() {
                 finished = true;
             } else {
                 setData(sendSeq, head.SubSeq(), head.RealSeq(), buffer, head.PacketLength());
+                if (process == 10) {
+                    DumpData();
+                }
+                ++process;
             }
-            sendHead.SetAckSeq(ackSeq.load());
+            sendHead.SetAckSeq(recvStart.load());
             sendHead.SetACK();
             sendto(listenFD, sendBuffer, HEADER_LENGTH, 0,
                    reinterpret_cast<const sockaddr *>(&clientADDR), clientADDRLen);
         }
+        //std::cout << "try dump" << std::endl;
     }
     close();
 }

@@ -13,7 +13,7 @@ private:
     static const uint8_t RST = 0b1000;
 //    uint32_t crc;  // 4
 //    uint16_t sendSeq; // 6
-//    uint16_t ackSeq; // 8
+//    uint16_t recvStart; // 8
 //    uint16_t packetLength; // 10
 //    uint8_t subSeq; // 11
 //    uint8_t symbol; // 12
