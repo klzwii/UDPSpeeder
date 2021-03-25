@@ -30,7 +30,6 @@ int main() {
         exit(0);
     }
     negotiateConfig();
-    int success = 0, fail = 0;
     std::cout << "server started" << std::endl;
     uint8_t sendBuffer[HEADER_LENGTH];
     auto sendHead = header(sendBuffer);

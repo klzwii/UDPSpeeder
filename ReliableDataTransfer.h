@@ -14,11 +14,15 @@
 #define PACKET_SIZE 1000
 #define RS_LENGTH 4
 #define TRY_RECOVER_THRESHOLD 2
-#define BATCH_LENGTH 5
-#define RS_LENGTH 2
 #define THREAD_NUM 8
+#define RESEND_THRESHOLD 700
+#define PACKET_LOSS 10
+
 static std::atomic_uint16_t recvEnd;
 static std::atomic_uint16_t recvStart;
+static std::atomic_uint16_t SendWindowEnd;
+static std::atomic_bool finished;
+static std::atomic_uint16_t SendWindowStart;
 static uint8_t **buffers;
 static uint8_t **sendBuffers;
 static std::once_flag t;
@@ -29,6 +33,10 @@ static bool finish[WINDOW_SIZE];
 static std::atomic_uint16_t wg;
 static timeval recvTime[WINDOW_SIZE];
 static RSHelper* helpers[WINDOW_SIZE];
+static int UDPSock;
+static std::atomic_bool closed;
+static struct sockaddr_in sSendAddr{};
+static timeval sendTime[WINDOW_SIZE];
 FILE *file;
 
 void init() {
@@ -93,53 +101,7 @@ void setData(uint16_t seq, uint8_t subSeq, uint8_t realSeq, uint8_t* buffer, uin
     std::cout << "last seq" << recvEnd.load() << std::endl;
 }
 
-bool dumpData(RSHelper *k) {
-    uint16_t curSeq = recvStart.load();
-    uint16_t pos = (curSeq + 1) % WINDOW_SIZE;
-    uint8_t ackBits = ack[pos].load();
-    if (recvTime[pos].tv_usec == 0 && recvTime[pos].tv_sec == 0) {
-        return false;
-    }
-    uint8_t realBits = (1 << realLength[pos]) - 1;
-    bool canDump = false;
-    if ((realBits & ackBits) == realBits) {
-        canDump = true;
-    } else {
-        timeval curTime{};
-        gettimeofday(&curTime, nullptr);
-        auto diffTime = (curTime.tv_sec - recvTime[pos].tv_sec) * 1000 + (curTime.tv_usec - recvTime[pos].tv_usec) / 1000;
-        if (diffTime > TRY_RECOVER_THRESHOLD) {
-            int nowPackets = 0;
-            while (ackBits) {
-                nowPackets += (1 & ackBits);
-                ackBits >>= 1;
-            }
-            if ((RS_LENGTH >> 1) >= (RS_LENGTH + realLength[pos] - nowPackets)) {
-                uint8_t *p[RS_LENGTH + BATCH_LENGTH];
-                for (int i = 0; i < realLength[pos]; i ++) {
-                    p[i + RS_LENGTH] = buffers[pos] + i * PACKET_SIZE;
-                }
-                for (int i = 0; i < RS_LENGTH; i ++) {
-                    p[i] = buffers[pos] + (realLength[pos] + i) * PACKET_SIZE;
-                }
-                canDump = k->GetOriginMessageFromPackets(p, realLength[pos], RS_LENGTH, PACKET_SIZE);
-                //std::cout << (end.tv_sec - start.tv_sec) * 1000 + (end.tv_usec - start.tv_usec) / 1000 << std::endl;
-            }
-        }
-    }
-    if (canDump) {
-        //std::cout << "dump " << curSeq << std::endl;
-        fwrite(buffers[pos], 1, packetLengths[pos], file);
-        recvStart.store(curSeq + 1);
-        recvTime[pos] = timeval{0, 0};
-        ack[pos].store(0);
-//        DumpData(k);
-    }
-    return canDump;
-}
-
 void DumpDataBySeq(uint16_t curSeq) {
-    //std::cout << "start processing " << curSeq << std::endl;
     ++curSeq;
     std::cout << "curSeq: " << curSeq << std::endl;
     uint16_t pos = curSeq % WINDOW_SIZE;
