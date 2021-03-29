@@ -3,7 +3,7 @@ project(UDPSpeeder)
 
 set(CMAKE_CXX_STANDARD 14)
 
-set(CMAKE_CXX_FLAGS -lpthread)
+set(CMAKE_CXX_FLAGS "-pthread -l netfilter_queue")
 
 include_directories(${PROJECT_SOURCE_DIR}/lib/crc32/include)
 link_libraries(${PROJECT_SOURCE_DIR}/lib/crc32/libcrc32c.a)
