@@ -40,7 +40,7 @@ static timeval sendTime[WINDOW_SIZE];
 FILE *file;
 
 void init() {
-    for (int i = 0; i < WINDOW_SIZE; i ++) {
+    for (int i = 0; i < THREAD_NUM; i ++) {
         helpers[i] = new RSHelper();
     }
     memset(recvTime, 0, sizeof(recvTime));

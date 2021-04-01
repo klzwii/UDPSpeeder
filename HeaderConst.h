@@ -43,6 +43,12 @@ public:
     void SetSubSeq(uint8_t subSeq) {
         *reinterpret_cast<uint8_t*>(addr + 10) = subSeq;
     }
+    void SetFIN() {
+        *reinterpret_cast<uint8_t*>(addr + 11) |= FIN;
+    }
+    void SetACK() {
+        *reinterpret_cast<uint8_t*>(addr + 11) |= ACK;
+    }
     void SetRealSeq(uint8_t realSeq) {
         *reinterpret_cast<uint8_t*>(addr + 12) = realSeq;
     }
@@ -51,12 +57,6 @@ public:
     }
     void SetHeadStart(uint16_t headStart) {
         *reinterpret_cast<uint16_t*>(addr + 14) = headStart;
-    }
-    void SetFIN() {
-        *reinterpret_cast<uint8_t*>(addr + 11) |= FIN;
-    }
-    void SetACK() {
-        *reinterpret_cast<uint8_t*>(addr + 11) |= ACK;
     }
     uint32_t CRC() {
         return *reinterpret_cast<uint32_t*>(addr);

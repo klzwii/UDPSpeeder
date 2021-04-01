@@ -87,7 +87,6 @@ void validatePacket(uint16_t *buffer, size_t len) {
 
 int cb(struct nfq_q_handle *gh, struct nfgenmsg *nfmsg, struct nfq_data *nfad, void *data) {
     struct iphdr *iph;
-    SOCK
     struct nfqnl_msg_packet_hdr *ph;
     ph = nfq_get_msg_packet_hdr(nfad);
     unsigned char* payload;
@@ -163,7 +162,7 @@ void readFromFD() {
     int len;
     while ((len = recvfrom(fd, buffer, 2000, 0, (sockaddr*)&sout, &sockLen)) > 0) {
         auto iph = (iphdr*)buffer;
-        iph->saddr = inet_addr("10.0.12.13");
+        iph->saddr = inet_addr("192.168.23.1");
         printf("111\n");
         printIP(iph->saddr);
         printIP(iph->daddr);
