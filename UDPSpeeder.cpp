@@ -11,13 +11,16 @@
 #include <libnetfilter_queue/libnetfilter_queue.h>
 #include <libnetfilter_queue/libnetfilter_queue_ipv4.h>
 #include <linux/netfilter.h>
+#include <map>
+#include "RDT.h"
 
-struct sockaddr_in sin{}, sout{};
+struct sockaddr_in structsockaddrIn{}, sout{};
 socklen_t sockLen;
 int rawFD;
+std::map<uint16_t, RDT*>rdtMap;
+RDT* rdt = nullptr;
 
 void printIP(uint32_t netIP) {
-    auto hostIP = be32toh(netIP);
     auto *k = (uint8_t*)&netIP;
     for (int i = 0; i <= 3; i ++) {
         printf("%d.", (int)*(k+i));
@@ -66,25 +69,6 @@ void reCalcChecksum(uint16_t *buffer, size_t len) {
     iph->check = ~cksum;
 }
 
-void validatePacket(uint16_t *buffer, size_t len) {
-    uint32_t cksum = 0;
-    while(len)
-    {
-        cksum += *(buffer++);
-        len -= 2;
-    }
-    while (cksum >> 16) {
-        uint16_t t = cksum >> 16;
-        cksum &= 0x0000ffff;
-        cksum += t;
-    }
-    if (cksum != 0x0000ffff) {
-        printf("wrong\n");
-    } else {
-        printf("right\n");
-    }
-}
-
 int cb(struct nfq_q_handle *gh, struct nfgenmsg *nfmsg, struct nfq_data *nfad, void *data) {
     struct iphdr *iph;
     struct nfqnl_msg_packet_hdr *ph;
@@ -96,13 +80,10 @@ int cb(struct nfq_q_handle *gh, struct nfgenmsg *nfmsg, struct nfq_data *nfad, v
         if (mark == 100) {
             nfq_set_verdict(gh, id, NF_ACCEPT, 0, nullptr);
         }
+        // todo check if dest ip exist in IP pool
         int r = nfq_get_payload(nfad, &payload);
         if (r >= sizeof(struct iphdr)) {
             iph = reinterpret_cast<struct iphdr*>(payload);
-//            if (!checkIPOut(iph)) {
-//                nfq_set_verdict(gh, id, NF_ACCEPT, r, payload);
-//                return 0;
-//            }
             std::string s;
             switch (iph->protocol) {
                 case IPPROTO_ICMP:
@@ -115,64 +96,66 @@ int cb(struct nfq_q_handle *gh, struct nfgenmsg *nfmsg, struct nfq_data *nfad, v
             printf("get %s packets, length %d\n", s.c_str(), (int)be16toh(iph->tot_len));
             printIP(iph->saddr);
             printIP(iph->daddr);
-            auto c = sendto(fd, payload, r, 0, (sockaddr*)&sout, sizeof(sockaddr_in));
-            if (c < 0) {
-                perror("send");
-            }
-            printf("send raw ret is %ld\n", c);
+            rdt->AddData(payload, r);
+            rdt->BufferTimeOut();
             return nfq_set_verdict(gh, id, NF_ACCEPT, 0, nullptr);
         }
     }
     return 0;
 }
 
-int getSubnetMask()
-{
-    struct sockaddr_in *sin = NULL;
-    struct ifaddrs *ifa = NULL, *ifList;
-
-    if (getifaddrs(&ifList) < 0)
-    {
-        return -1;
-    }
-
-    for (ifa = ifList; ifa != NULL; ifa = ifa->ifa_next)
-    {
-        if(ifa->ifa_addr->sa_family == AF_INET)
-        {
-            printf("n>>> interfaceName: %s\n", ifa->ifa_name);
-
-            sin = (struct sockaddr_in *)ifa->ifa_addr;
-            printf(">>> ipAddress: %s\n", inet_ntoa(sin->sin_addr));
-
-            sin = (struct sockaddr_in *)ifa->ifa_dstaddr;
-            printf(">>> broadcast: %s\n", inet_ntoa(sin->sin_addr));
-
-            sin = (struct sockaddr_in *)ifa->ifa_netmask;
-            printf(">>> subnetMask: %s\n", inet_ntoa(sin->sin_addr));
-        }
-    }
-
-    freeifaddrs(ifList);
-    return 0;
-}
 
 void readFromFD() {
     uint8_t buffer[2000];
     int len;
+    fd_set readFD;
+    FD_ZERO(&readFD);
+    FD_SET(fd, &readFD);
+    timeval timeOut{0, 20000};
+    while (true) {
+        auto setCopy = readFD;
+        auto tvCopy = timeOut;
+        int selectedFD = select(fd + 1, &readFD, nullptr, nullptr, &tvCopy);
+        if (selectedFD == 0) {
+            if (rdt == nullptr) {
+                continue;
+            }
+            rdt->TimeOut();
+            rdt->DumpData();
+            // todo timeout
+        } else if (FD_ISSET(fd, &setCopy)) {
+            len = recvfrom(fd, buffer, 2000, 0, (sockaddr*)&sout, &sockLen);
+            if (rdt == nullptr) {
+                rdt = new RDT(128, 5, 400, 2, &sout, 10, 2000, 50);
+            }
+            if (len < 0) {
+                perror("recv from");
+            }
+            rdt->RecvBuffer(buffer);
+            rdt->DumpData();
+            rdt->TimeOut();
+        } else {
+            perror("select");
+        }
+    }
     while ((len = recvfrom(fd, buffer, 2000, 0, (sockaddr*)&sout, &sockLen)) > 0) {
-        auto iph = (iphdr*)buffer;
-        iph->saddr = inet_addr("192.168.23.1");
-        printf("111\n");
-        printIP(iph->saddr);
-        printIP(iph->daddr);
-        printf("111\n");
-        reCalcChecksum((uint16_t*)buffer, len);
-        struct sockaddr_in out{};
-        out.sin_addr.s_addr = iph->daddr;
-        out.sin_family = AF_INET;
-        auto k = sendto(rawFD, buffer, len, 0, (sockaddr*)&out, sizeof(sockaddr_in));
-        printf("%ld\n", k);
+//        auto iph = (iphdr*)buffer;
+//        iph->saddr = inet_addr("192.168.23.1");
+//        printf("111\n");
+//        printIP(iph->saddr);
+//        printIP(iph->daddr);
+//        printf("111\n");
+//        reCalcChecksum((uint16_t*)buffer, len);
+//        struct sockaddr_in out{};
+//        out.sin_addr.s_addr = iph->daddr;
+//        out.sin_family = AF_INET;
+        auto head = header(buffer);
+        if (rdt == nullptr) {
+            rdt = new RDT(128, 5, 400, 2, &sout, 10, 2000, 50);
+        }
+        rdt->RecvBuffer(buffer);
+        //auto k = sendto(rawFD, buffer, len, 0, (sockaddr*)&out, sizeof(sockaddr_in));
+        //printf("%ld\n", k);
     }
     if (len < 0) {
         perror("recv");
@@ -187,25 +170,21 @@ int main() {
         perror("raw fd");
         exit(0);
     }
-    int mark = 100;
     fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-    if (setsockopt(rawFD, SOL_SOCKET, SO_MARK, &mark, sizeof(mark)) < 0) {
-        perror("set mark");
-        exit(0);
-    }
     if (fd < 0) {
         perror("open socket");
         exit(0);
     }
 
-    sin.sin_port = htons(1234);
-    sin.sin_addr.s_addr = htonl(INADDR_ANY);
-    sin.sin_family = AF_INET;
-    auto c = bind(fd, (sockaddr *)&sin, sizeof(struct sockaddr_in));
+    structsockaddrIn.sin_port = htons(1234);
+    structsockaddrIn.sin_addr.s_addr = htonl(INADDR_ANY);
+    structsockaddrIn.sin_family = AF_INET;
+    auto c = bind(fd, (sockaddr *)&structsockaddrIn, sizeof(struct sockaddr_in));
     if (c < 0) {
         perror("bind");
         exit(0);
     }
+    RDT::init(fd);
     struct nfq_handle *h;
     struct nfq_q_handle *qh;
     int r;
@@ -216,7 +195,6 @@ int main() {
         perror("nfq_open error");
         exit(0);
     }
-
     if (nfq_unbind_pf(h, AF_INET) != 0) {
         perror("nfq_unbind_pf error");
         exit(0);
@@ -244,11 +222,12 @@ int main() {
     while(true) {
         auto fdCopy = oriFD;
         auto tvCopy = tv;
-        auto c = select(queueFD + 1, &fdCopy, nullptr, nullptr, &tvCopy);
-        if (c == 0) {
-            continue;
-        }
-        if (FD_ISSET(queueFD, &fdCopy)) {
+        auto selectedFD = select(queueFD + 1, &fdCopy, nullptr, nullptr, &tvCopy);
+        if (selectedFD == 0) {
+            //todo check all clients send buffer time out
+            if (rdt != nullptr)
+            rdt->BufferTimeOut();
+        } else if (FD_ISSET(queueFD, &fdCopy)) {
             r = recv(queueFD, buf, sizeof(buf), MSG_DONTWAIT);
             if (r == 0) {
                 printf("recv return 0. exit");
@@ -259,6 +238,8 @@ int main() {
             } else {
                 nfq_handle_packet(h, buf, r);
             }
+        } else {
+            perror("select");
         }
     }
     return 0;

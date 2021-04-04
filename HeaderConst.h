@@ -5,6 +5,8 @@
 #ifndef UDPWINCLIENT_HEADERCONST_H
 #define UDPWINCLIENT_HEADERCONST_H
 #define HEADER_LENGTH 16
+#include <string>
+
 struct header {
 private:
     static const uint8_t FIN = 0b1;
@@ -87,6 +89,11 @@ public:
     }
     bool IsACK() {
         return *reinterpret_cast<uint8_t*>(addr + 11) & ACK;
+    }
+    std::string toStr() {
+        char buffer[200];
+        sprintf(buffer, "SendSeq: %d SubSeq: %d", SendSeq(), (int)SubSeq());
+        return buffer;
     }
 };
 #endif //UDPWINCLIENT_HEADERCONST_H
