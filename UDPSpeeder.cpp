@@ -20,14 +20,6 @@ int rawFD;
 std::map<uint16_t, RDT*>rdtMap;
 RDT* rdt = nullptr;
 
-void printIP(uint32_t netIP) {
-    auto *k = (uint8_t*)&netIP;
-    for (int i = 0; i <= 3; i ++) {
-        printf("%d.", (int)*(k+i));
-    }
-    printf("\n");
-}
-
 int fd;
 
 bool checkIPOut(struct iphdr* iph) {
@@ -50,23 +42,6 @@ bool checkIPOut(struct iphdr* iph) {
         return false;
     }
     return true;
-}
-
-void reCalcChecksum(uint16_t *buffer, size_t len) {
-    auto *iph = (iphdr*)buffer;
-    iph->check = 0;
-    uint32_t cksum = 0;
-    while(len)
-    {
-        cksum += *(buffer++);
-        len -= 2;
-    }
-    while (cksum >> 16) {
-        uint16_t t = cksum >> 16;
-        cksum &= 0x0000ffff;
-        cksum += t;
-    }
-    iph->check = ~cksum;
 }
 
 int cb(struct nfq_q_handle *gh, struct nfgenmsg *nfmsg, struct nfq_data *nfad, void *data) {
@@ -94,8 +69,6 @@ int cb(struct nfq_q_handle *gh, struct nfgenmsg *nfmsg, struct nfq_data *nfad, v
                     break;
             }
             printf("get %s packets, length %d\n", s.c_str(), (int)be16toh(iph->tot_len));
-            printIP(iph->saddr);
-            printIP(iph->daddr);
             rdt->AddData(payload, r);
             rdt->BufferTimeOut();
             return nfq_set_verdict(gh, id, NF_ACCEPT, 0, nullptr);
@@ -112,10 +85,11 @@ void readFromFD() {
     FD_ZERO(&readFD);
     FD_SET(fd, &readFD);
     timeval timeOut{0, 20000};
+    int tik = 0;
     while (true) {
         auto setCopy = readFD;
         auto tvCopy = timeOut;
-        int selectedFD = select(fd + 1, &readFD, nullptr, nullptr, &tvCopy);
+        int selectedFD = select(fd + 1, &setCopy, nullptr, nullptr, &tvCopy);
         if (selectedFD == 0) {
             if (rdt == nullptr) {
                 continue;
@@ -124,9 +98,11 @@ void readFromFD() {
             rdt->DumpData();
             // todo timeout
         } else if (FD_ISSET(fd, &setCopy)) {
-            len = recvfrom(fd, buffer, 2000, 0, (sockaddr*)&sout, &sockLen);
+            sockaddr tempAddr{};
+            socklen_t tempLen;
+            len = recvfrom(fd, buffer, 2000, 0, &tempAddr, &tempLen);
             if (rdt == nullptr) {
-                rdt = new RDT(128, 5, 400, 2, &sout, 10, 2000, 50);
+                rdt = new RDT(8, 5, 200, 2, &tempAddr, &tempLen, 10, 2000, 10, inet_addr("192.168.23.1"));
             }
             if (len < 0) {
                 perror("recv from");
@@ -137,28 +113,6 @@ void readFromFD() {
         } else {
             perror("select");
         }
-    }
-    while ((len = recvfrom(fd, buffer, 2000, 0, (sockaddr*)&sout, &sockLen)) > 0) {
-//        auto iph = (iphdr*)buffer;
-//        iph->saddr = inet_addr("192.168.23.1");
-//        printf("111\n");
-//        printIP(iph->saddr);
-//        printIP(iph->daddr);
-//        printf("111\n");
-//        reCalcChecksum((uint16_t*)buffer, len);
-//        struct sockaddr_in out{};
-//        out.sin_addr.s_addr = iph->daddr;
-//        out.sin_family = AF_INET;
-        auto head = header(buffer);
-        if (rdt == nullptr) {
-            rdt = new RDT(128, 5, 400, 2, &sout, 10, 2000, 50);
-        }
-        rdt->RecvBuffer(buffer);
-        //auto k = sendto(rawFD, buffer, len, 0, (sockaddr*)&out, sizeof(sockaddr_in));
-        //printf("%ld\n", k);
-    }
-    if (len < 0) {
-        perror("recv");
     }
 }
 
@@ -217,7 +171,7 @@ int main() {
     fd_set oriFD;
     FD_ZERO(&oriFD);
     FD_SET(queueFD, &oriFD);
-    timeval tv{1, 0};
+    timeval tv{0, 10000};
     std::thread(readFromFD).detach();
     while(true) {
         auto fdCopy = oriFD;
