@@ -51,10 +51,6 @@ int cb(struct nfq_q_handle *gh, struct nfgenmsg *nfmsg, struct nfq_data *nfad, v
     unsigned char* payload;
     if (ph) {
         uint32_t id = ntohl(ph->packet_id);
-        int mark = nfq_get_nfmark(nfad);
-        if (mark == 100) {
-            nfq_set_verdict(gh, id, NF_ACCEPT, 0, nullptr);
-        }
         // todo check if dest ip exist in IP pool
         int r = nfq_get_payload(nfad, &payload);
         if (r >= sizeof(struct iphdr)) {
@@ -67,11 +63,14 @@ int cb(struct nfq_q_handle *gh, struct nfgenmsg *nfmsg, struct nfq_data *nfad, v
                 case IPPROTO_UDP:
                     s = "udp";
                     break;
+                case IPPROTO_TCP:
+                    s = "tcp";
+                    break;
             }
             printf("get %s packets, length %d\n", s.c_str(), (int)be16toh(iph->tot_len));
-            rdt->AddData(payload, r);
+            rdt->AddData(payload, r, true);
             rdt->BufferTimeOut();
-            return nfq_set_verdict(gh, id, NF_ACCEPT, 0, nullptr);
+            return nfq_set_verdict(gh, id, NF_DROP, 0, nullptr);
         }
     }
     return 0;
@@ -102,7 +101,7 @@ void readFromFD() {
             socklen_t tempLen;
             len = recvfrom(fd, buffer, 2000, 0, &tempAddr, &tempLen);
             if (rdt == nullptr) {
-                rdt = new RDT(8, 5, 200, 2, &tempAddr, &tempLen, 10, 2000, 10, inet_addr("192.168.23.1"));
+                rdt = new RDT(128, 5, 300, 2, &tempAddr, &tempLen, 10, 2000, 0, inet_addr("192.168.23.1"));
             }
             if (len < 0) {
                 perror("recv from");
