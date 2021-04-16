@@ -67,7 +67,7 @@ int cb(struct nfq_q_handle *gh, struct nfgenmsg *nfmsg, struct nfq_data *nfad, v
                     s = "tcp";
                     break;
             }
-            printf("get %s packets, length %d\n", s.c_str(), (int)be16toh(iph->tot_len));
+//            printf("get %s packets, length %d\n", s.c_str(), (int)be16toh(iph->tot_len));
             rdt->AddData(payload, r, true);
             rdt->BufferTimeOut();
             return nfq_set_verdict(gh, id, NF_DROP, 0, nullptr);
@@ -95,13 +95,12 @@ void readFromFD() {
             }
             rdt->TimeOut();
             rdt->DumpData();
-            // todo timeout
         } else if (FD_ISSET(fd, &setCopy)) {
             sockaddr tempAddr{};
             socklen_t tempLen;
             len = recvfrom(fd, buffer, 2000, 0, &tempAddr, &tempLen);
             if (rdt == nullptr) {
-                rdt = new RDT(128, 5, 300, 2, &tempAddr, &tempLen, 10, 2000, 0, inet_addr("192.168.23.1"));
+                rdt = new RDT(128, 1, 1472, 0, &tempAddr, &tempLen, 10, 2000, 0, inet_addr("192.168.23.1"));
             }
             if (len < 0) {
                 perror("recv from");
@@ -144,7 +143,7 @@ int main() {
     char buf[10240];
     //auto f = popen("iptables -A OUTPUT -j NFQUEUE 1234", "r");
     h = nfq_open();
-    if (h == NULL) {
+    if (h == nullptr) {
         perror("nfq_open error");
         exit(0);
     }
@@ -156,8 +155,8 @@ int main() {
         perror("nfq_bind_pf error");
         exit(0);
     }
-    qh = nfq_create_queue(h, 1234, &cb, NULL);
-    if (qh == NULL) {
+    qh = nfq_create_queue(h, 1234, &cb, nullptr);
+    if (qh == nullptr) {
         perror("nfq_create_queue error");
         exit(0);
     }
@@ -181,13 +180,12 @@ int main() {
             if (rdt != nullptr)
             rdt->BufferTimeOut();
         } else if (FD_ISSET(queueFD, &fdCopy)) {
-            r = recv(queueFD, buf, sizeof(buf), MSG_DONTWAIT);
+            r = recv(queueFD, buf, sizeof(buf), 0);
             if (r == 0) {
                 printf("recv return 0. exit");
                 break;
             } else if (r < 0) {
                 perror("recv error");
-                break;
             } else {
                 nfq_handle_packet(h, buf, r);
             }

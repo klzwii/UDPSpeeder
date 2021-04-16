@@ -94,11 +94,15 @@ public:
 #endif
         close(rawSocket);
     }
+
 #ifdef client
-    RDT(uint WINDOW_SIZE, uint BATCH_LENGTH, uint PACKET_SIZE, uint RS_LENGTH, in_addr_t SendAddr, in_port_t SendPort, uint32_t RECOVER_THRESHOLD, uint32_t RESEND_THRESHOLD, uint32_t BUFFER_THRESHOLD, in_addr_t fakeIP)
+    RDT(uint WINDOW_SIZE, uint BATCH_LENGTH, uint PACKET_SIZE, uint RS_LENGTH, in_addr_t SendAddr, in_port_t SendPort,
+        uint32_t RECOVER_THRESHOLD, uint32_t RESEND_THRESHOLD, uint32_t BUFFER_THRESHOLD, in_addr_t fakeIP)
 #endif
 #ifdef server
-    RDT(uint WINDOW_SIZE, uint BATCH_LENGTH, uint PACKET_SIZE, uint RS_LENGTH, sockaddr* sockADDR, socklen_t* sockLen, uint32_t RECOVER_THRESHOLD, uint32_t RESEND_THRESHOLD, uint32_t BUFFER_THRESHOLD, in_addr_t fakeIP)
+
+    RDT(uint WINDOW_SIZE, uint BATCH_LENGTH, uint PACKET_SIZE, uint RS_LENGTH, sockaddr *sockADDR, socklen_t *sockLen,
+        uint32_t RECOVER_THRESHOLD, uint32_t RESEND_THRESHOLD, uint32_t BUFFER_THRESHOLD, in_addr_t fakeIP)
 #endif
     {
         if ((WINDOW_SIZE & -WINDOW_SIZE) != WINDOW_SIZE) {
@@ -132,26 +136,25 @@ public:
         for (int i = 0; i < WINDOW_SIZE; i ++) {
             sendBuffers[i] = reinterpret_cast<uint8_t*>(calloc(bufferSize, 1));
         }
-        RecvBuffers = reinterpret_cast<uint8_t**>(calloc(sizeof(void *), WINDOW_SIZE));
-        for (int i = 0; i < WINDOW_SIZE; i ++) {
-            RecvBuffers[i] = reinterpret_cast<uint8_t*>(calloc(bufferSize, 1));
+        RecvBuffers = reinterpret_cast<uint8_t **>(calloc(sizeof(void *), WINDOW_SIZE));
+        for (int i = 0; i < WINDOW_SIZE; i++) {
+            RecvBuffers[i] = reinterpret_cast<uint8_t *>(calloc(bufferSize, 1));
         }
-        ack = reinterpret_cast<uint32_t*>(calloc(sizeof(uint32_t), WINDOW_SIZE));
+        ack = reinterpret_cast<uint32_t *>(calloc(sizeof(uint32_t), WINDOW_SIZE));
         SEGMENT_LENGTH = PACKET_SIZE + HEADER_LENGTH;
-        helpers = reinterpret_cast<RSHelper**>(malloc(sizeof(void *) * THREAD_NUM));
-        for (int i = 0; i < THREAD_NUM; i ++) {
+        helpers = reinterpret_cast<RSHelper **>(malloc(sizeof(void *) * THREAD_NUM));
+        for (int i = 0; i < THREAD_NUM; i++) {
             helpers[i] = new RSHelper();
         }
-        sendTime = reinterpret_cast<timeval*>(malloc(sizeof(struct timeval) * WINDOW_SIZE));
-        recvTime = reinterpret_cast<timeval*>(malloc(sizeof(struct timeval) * WINDOW_SIZE));
-        finish = reinterpret_cast<bool*>(calloc(WINDOW_SIZE, sizeof(bool)));
-        buffer = reinterpret_cast<uint8_t*>(calloc(DATA_LENGTH, sizeof(uint8_t)));
-        PacketLength = reinterpret_cast<uint16_t*>(calloc(WINDOW_SIZE, sizeof(uint16_t)));
-        FirstHeader = reinterpret_cast<uint16_t*>(calloc(WINDOW_SIZE, sizeof(uint16_t)));
+        sendTime = reinterpret_cast<timeval *>(malloc(sizeof(timeval) * WINDOW_SIZE));
+        recvTime = reinterpret_cast<timeval *>(malloc(sizeof(timeval) * WINDOW_SIZE));
+        finish = reinterpret_cast<bool *>(calloc(WINDOW_SIZE, sizeof(bool)));
+        buffer = reinterpret_cast<uint8_t *>(calloc(DATA_LENGTH, sizeof(uint8_t)));
+        PacketLength = reinterpret_cast<uint16_t *>(calloc(WINDOW_SIZE, sizeof(uint16_t)));
+        FirstHeader = reinterpret_cast<uint16_t *>(calloc(WINDOW_SIZE, sizeof(uint16_t)));
         rawSocket = socket(AF_INET, SOCK_RAW, IPPROTO_RAW);
         int val = 1;
-        if (setsockopt(rawSocket, IPPROTO_IP, IP_HDRINCL, reinterpret_cast<const void *>(&val), sizeof(int)))
-        {
+        if (setsockopt(rawSocket, IPPROTO_IP, IP_HDRINCL, reinterpret_cast<const void *>(&val), sizeof(int))) {
             perror("setsockopt() error");
             exit(-1);
         }
@@ -199,8 +202,6 @@ public:
     void SendBuffer();
 
     void SendRawBuffer();
-
-    static uint16_t calcCheckSum(uint16_t *data, size_t len);
 
     static uint16_t calcCheckSum(uint16_t *data, size_t len, const uint16_t *fakeHead);
 };
