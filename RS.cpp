@@ -6,7 +6,7 @@
 #include <cstdio>
 #include <cstring>
 
-void RS::encode(uint8_t **shards, int ShardLength) {
+void RS::encode(uint8_t **shards, unsigned ShardLength) {
     for (int i = DataShards; i < DataShards + FECShards; i++) {
         for (int j = 0; j < ShardLength; j++) {
             for (int k = 0; k < DataShards; k++) {
@@ -16,7 +16,7 @@ void RS::encode(uint8_t **shards, int ShardLength) {
     }
 }
 
-void RS::decode(uint8_t **shards, int ShardLength, const bool validShards[]) {
+void RS::decode(uint8_t **shards, unsigned ShardLength, const bool validShards[]) {
     galois::gf originMat[DataShards][DataShards];
     galois::gf invMat[DataShards][DataShards];
     memset(originMat, 0, sizeof(originMat));
