@@ -13,6 +13,7 @@
 int RDT::serverFD = 0;
 #endif
 
+
 long long operator - (const timeval &a, const timeval &b) {
     long long t = (a.tv_sec - b.tv_sec) * 1000 + (a.tv_usec - b.tv_usec) / 1000;
     if (t < 0) {
@@ -64,29 +65,29 @@ void RDT::reCalcChecksum(uint16_t *payLoad, size_t len) {
         }
     }
     iph->check = 0;
-    iph->check = ~(calcCheckSum(payLoad, len, nullptr));
+    iph->check = ~(calcCheckSum(payLoad, headLen, nullptr));
 }
 
 // non thread safe
 void RDT::SendBuffer() {
     uint16_t curSeq = SendWindowEnd;
-    while ((uint16_t)(curSeq - SendWindowStart.load()) >= WINDOW_SIZE) {
+    while ((uint16_t) (curSeq - SendWindowStart.load()) >= WINDOW_SIZE) {
         std::this_thread::yield();
     }
-    uint8_t* p[20];
+    uint8_t *p[20];
     ++SendWindowEnd;
-    uint8_t* &currentBuffer = sendBuffers[SendWindowEnd % WINDOW_SIZE];
-    for (int i = 0; i < RS_LENGTH; i++) {
-        p[i] = currentBuffer + (i + BATCH_LENGTH) * SEGMENT_LENGTH + HEADER_LENGTH;
-    }
-    for (int i = 0; i < BATCH_LENGTH; i ++) {
+    uint8_t *&currentBuffer = sendBuffers[SendWindowEnd % WINDOW_SIZE];
+    for (auto i = 0; i < BATCH_LENGTH; i++) {
         memcpy(currentBuffer + i * SEGMENT_LENGTH + HEADER_LENGTH, buffer + i * PACKET_SIZE, PACKET_SIZE);
-        p[i + RS_LENGTH] = currentBuffer + i * SEGMENT_LENGTH + HEADER_LENGTH;
+        p[i] = currentBuffer + i * SEGMENT_LENGTH + HEADER_LENGTH;
+    }
+    for (auto i = BATCH_LENGTH; i < BATCH_LENGTH + RS_LENGTH; i++) {
+        p[i] = currentBuffer + i * SEGMENT_LENGTH + HEADER_LENGTH;
     }
     if (RS_LENGTH != 0) {
-        helpers[0]->GenerateRSPacket(p, BATCH_LENGTH, RS_LENGTH, PACKET_SIZE);
+        rdtEncode(p, offset);
     }
-    for (int i = 0; i < RS_LENGTH + BATCH_LENGTH; i ++) {
+    for (int i = 0; i < RS_LENGTH + BATCH_LENGTH; i++) {
         auto head = header(currentBuffer + i * SEGMENT_LENGTH);
         head.SetPacketLength(offset);
         head.SetRealSeq(BATCH_LENGTH);
@@ -101,13 +102,21 @@ void RDT::SendBuffer() {
 }
 
 void RDT::sendBufferBySeq(uint16_t seq) {
-    uint8_t* &currentBuffer = sendBuffers[seq % WINDOW_SIZE];
-    for (int i = 0; i < BATCH_LENGTH + RS_LENGTH; i ++) {
+#ifdef debug
+    printf("send buffer %d\n", seq);
+#endif
+    uint8_t *&currentBuffer = sendBuffers[seq % WINDOW_SIZE];
+    for (int i = 0; i < BATCH_LENGTH + RS_LENGTH; i++) {
         auto head = header(currentBuffer + i * SEGMENT_LENGTH);
         if (head.AckSeq() != RecvStart) {
             head.SetAckSeq(RecvStart);
             head.SetCRC(crc32c::Crc32c(currentBuffer + i * SEGMENT_LENGTH + 4, SEGMENT_LENGTH - 4));
         }
+#ifdef lossRate
+        if (rand() % 10000 < lossRate * 10000) {
+            continue;
+        }
+#endif
         int sendRet = 0;
 #ifdef client
         sendRet = send(sendFD, currentBuffer + i * SEGMENT_LENGTH, SEGMENT_LENGTH, 0);
@@ -119,7 +128,10 @@ void RDT::sendBufferBySeq(uint16_t seq) {
             perror("send");
         }
     }
-    gettimeofday(&sendTime[seq % WINDOW_SIZE], nullptr);
+    timeval temp{};
+    gettimeofday(&temp, nullptr);
+    sendTime[seq % WINDOW_SIZE] = temp;
+    lastSendTime = temp;
 }
 
 //non thread-safe
@@ -199,7 +211,6 @@ void RDT::DumpDataBySeq(uint16_t curSeq, RDT* rdt, int id) {
     const int &BATCH_LENGTH = rdt->BATCH_LENGTH;
     const int &PACKET_SIZE = rdt->PACKET_SIZE;
     uint8_t ackBits = rdt->ack[pos];
-    auto k = rdt->helpers[id];
     if (rdt->recvTime[pos].tv_usec == 0 && rdt->recvTime[pos].tv_sec == 0) {
         return;
     }
@@ -213,23 +224,34 @@ void RDT::DumpDataBySeq(uint16_t curSeq, RDT* rdt, int id) {
         auto diffTime = curTime - rdt->recvTime[pos];
         if (diffTime > rdt->RECOVER_THRESHOLD) {
             int nowPackets = 0;
+            bool validShards[RS_LENGTH + BATCH_LENGTH];
+            memset(validShards, 0, sizeof(validShards));
+            int validPos = 0;
             while (ackBits) {
-                nowPackets += (1 & ackBits);
+                if (1 & ackBits) {
+                    ++nowPackets;
+                    validShards[validPos] = true;
+                }
+                ++validPos;
                 ackBits >>= 1;
             }
-            if ((RS_LENGTH >> 1) >= (RS_LENGTH + BATCH_LENGTH - nowPackets)) {
+#ifdef debug
+            printf("try recover valid packets %d\n", nowPackets);
+#endif
+            if (nowPackets >= BATCH_LENGTH) {
                 uint8_t *p[RS_LENGTH + BATCH_LENGTH];
-                uint8_t* &currentBuffer = rdt->RecvBuffers[pos];
-                for (int i = 0; i < BATCH_LENGTH; i ++) {
-                    p[i + RS_LENGTH] = currentBuffer + i * PACKET_SIZE;
+                uint8_t *&currentBuffer = rdt->RecvBuffers[pos];
+                for (int i = 0; i < BATCH_LENGTH + RS_LENGTH; i++) {
+                    p[i] = currentBuffer + PACKET_SIZE * i;
                 }
-                for (int i = 0; i < RS_LENGTH; i ++) {
-                    p[i] = currentBuffer + (BATCH_LENGTH + i) * PACKET_SIZE;
-                }
-                canDump = k->GetOriginMessageFromPackets(p, BATCH_LENGTH, RS_LENGTH, PACKET_SIZE);
+                canDump = rdt->rdtDecode(p, validShards, rdt->PacketLength[pos]);
+#ifdef debug
                 if (!canDump) {
                     printf("recover message fail seq:%d realLength:%d\n arrivePackets:%d ", curSeq, BATCH_LENGTH, nowPackets);
+                } else {
+                    printf("recover succeed\n");
                 }
+#endif
             }
         }
     }
@@ -274,19 +296,19 @@ bool RDT::DumpData() {
             flg = true;
             uint16_t packetLength = PacketLength[pos];
             if (packetLength != 0) {
-                uint16_t recvOffset = 0;
-                uint16_t copyLength = FirstHeader[pos];
-                memcpy(rawBuffer + rawOffset, RecvBuffers[pos], copyLength);
+                uint16_t recvOffset = 4;
+                uint16_t copyLength = FirstHeader[pos] - 4;
+                memcpy(rawBuffer + rawOffset, RecvBuffers[pos] + recvOffset, copyLength);
                 rawOffset += copyLength;
                 recvOffset += copyLength;
                 SendRawBuffer();
                 while (recvOffset != packetLength) {
                     uint16_t dataLeft = packetLength - recvOffset;
                     if (dataLeft >= sizeof(struct iphdr)) {
-                        auto *hdr = reinterpret_cast<struct iphdr*>(RecvBuffers[pos] + recvOffset);
+                        auto *hdr = reinterpret_cast<struct iphdr *>(RecvBuffers[pos] + recvOffset);
                         copyLength = be16toh(hdr->tot_len);
                     }
-                    copyLength = std::min((uint16_t)(packetLength - recvOffset), copyLength);
+                    copyLength = std::min((uint16_t) (packetLength - recvOffset), copyLength);
                     memcpy(rawBuffer + rawOffset, RecvBuffers[pos] + recvOffset, copyLength);
                     rawOffset += copyLength;
                     recvOffset += copyLength;
@@ -334,27 +356,24 @@ void RDT::SendRawBuffer() {
 }
 
 void RDT::AddData(uint8_t *data, size_t length, bool initial) {
-    size_t copyLength = std::min(DATA_LENGTH - offset, length);
-    memcpy(this->buffer + offset, data, copyLength);
     if (offset == 0) {
+        offset += 4;
         gettimeofday(&bufferStartTime, nullptr);
     }
+    if (DATA_LENGTH - offset < length) {
+        SendBuffer();
+        offset = 0;
+        firstHead = DATA_LENGTH;
+        AddData(data, length, true);
+        return;
+    }
+    memcpy(this->buffer + offset, data, length);
     if (initial) {
         if (firstHead > offset) {
             firstHead = offset;
         }
     }
-    offset += copyLength;
-    length -= copyLength;
-    data += copyLength;
-    if (offset == DATA_LENGTH) {
-        SendBuffer();
-        offset = 0;
-        firstHead = DATA_LENGTH;
-    }
-    if (length > 0) {
-        AddData(data, length, false);
-    }
+    offset += length;
 }
 
 
@@ -380,7 +399,7 @@ void RDT::BufferTimeOut() {
 void RDT::TimeOut() {
     timeval curTime{};
     gettimeofday(&curTime, nullptr);
-    for (uint16_t i = SendWindowStart + 1; SendWindowEnd - i <= WINDOW_SIZE; i ++) {
+    for (uint16_t i = SendWindowStart + 1; SendWindowEnd - i <= WINDOW_SIZE; i++) {
         if (curTime - sendTime[i % WINDOW_SIZE] > RESEND_THRESHOLD) {
             sendBufferBySeq(i);
         } else {
@@ -389,9 +408,49 @@ void RDT::TimeOut() {
     }
 }
 
+bool RDT::rdtDecode(uint8_t **decodeShards, const bool *validShards, uint16_t length) {
+    rs->decode(decodeShards, PACKET_SIZE, validShards);
+    uint32_t checkSum = *(uint32_t *) decodeShards[0];
+    uint32_t calcCheckSum = 0;
+    *(uint32_t *) decodeShards[0] = 0;
+    for (int i = 0; i < BATCH_LENGTH; i++) {
+        calcCheckSum ^= crc32c::Crc32c(decodeShards[i], PACKET_SIZE);
+    }
+    return calcCheckSum == checkSum;
+}
+
+void RDT::rdtEncode(uint8_t **encodeShards, uint16_t length) {
+    *(uint32_t *) encodeShards[0] = 0;
+    uint32_t checkSum = 0;
+    for (int i = 0; i < BATCH_LENGTH; i++) {
+        checkSum ^= crc32c::Crc32c(encodeShards[i], PACKET_SIZE);
+    }
+    *(uint32_t *) encodeShards[0] = checkSum;
+    rs->encode(encodeShards, PACKET_SIZE);
+}
+
+void RDT::HeartBeat() {
+    if (SendWindowEnd != SendWindowStart.load()) {
+        timeval curTime{};
+        gettimeofday(&curTime, nullptr);
+        if (curTime - lastSendTime > 50) {
+#ifdef debug
+            printf("heart beat\n");
+#endif
+            lastSendTime = curTime;
+            auto head = header(heartBuffer);
+            head.SetACK();
+            head.SetAckSeq(RecvStart);
+            head.SetCRC(crc32c::Crc32c(heartBuffer, HEADER_LENGTH - 4));
+        }
+    }
+}
+
 #ifdef server
+
 void RDT::init(int fd) {
     serverFD = fd;
 }
+
 #endif
 

@@ -9,8 +9,8 @@
 #include <malloc.h>
 #include <cstring>
 #include "HeaderConst.h"
-#include "RSHelper.h"
 #include <thread>
+#include "RS.h"
 #include <random>
 #include <netinet/in.h>
 #include <unistd.h>
@@ -22,6 +22,7 @@ private:
     std::atomic_uint16_t SendWindowStart{}; // recv thread changes this variable and send thread also read this variable
     uint32_t *ack;
     bool *finish;
+    RS *rs;
 #ifdef server
     static int serverFD; // for server only
     sockaddr *sendSockAddr;
@@ -34,16 +35,21 @@ private:
     uint16_t firstHead;
     uint8_t rawBuffer[2000]{};
     uint16_t rawOffset = 0;
-    RSHelper **helpers;
     timeval *sendTime;
     timeval *recvTime;
+    timeval lastSendTime;
+
+    void rdtEncode(uint8_t **encodeShards, uint16_t length);
+
+    bool rdtDecode(uint8_t **decodeShards, const bool *validShards, uint16_t length);
+
 #ifdef client
     int sendFD;
     std::atomic_bool threadExit{false};
     static void RecvThread(RDT *rdt);
 #endif
-    uint8_t * buffer;
-    timeval bufferStartTime{0,0};
+    uint8_t *buffer;
+    timeval bufferStartTime{0, 0};
     size_t offset = 0;
     uint THREAD_NUM;
     uint WINDOW_SIZE;
@@ -51,6 +57,7 @@ private:
     uint PACKET_SIZE;
     uint RS_LENGTH;
     uint SEGMENT_LENGTH;
+    uint8_t heartBuffer[HEADER_LENGTH];
     uint DATA_LENGTH;
     uint32_t RESEND_THRESHOLD;
     uint32_t RECOVER_THRESHOLD;
@@ -76,10 +83,6 @@ public:
         }
         delete RecvBuffers;
         delete ack;
-        for (int i = 0; i < THREAD_NUM; i ++) {
-            delete helpers[i];
-        }
-        delete helpers;
         delete sendTime;
         delete recvTime;
         delete finish;
@@ -142,16 +145,14 @@ public:
         }
         ack = reinterpret_cast<uint32_t *>(calloc(sizeof(uint32_t), WINDOW_SIZE));
         SEGMENT_LENGTH = PACKET_SIZE + HEADER_LENGTH;
-        helpers = reinterpret_cast<RSHelper **>(malloc(sizeof(void *) * THREAD_NUM));
-        for (int i = 0; i < THREAD_NUM; i++) {
-            helpers[i] = new RSHelper();
-        }
+        rs = new RS(BATCH_LENGTH, RS_LENGTH);
         sendTime = reinterpret_cast<timeval *>(malloc(sizeof(timeval) * WINDOW_SIZE));
         recvTime = reinterpret_cast<timeval *>(malloc(sizeof(timeval) * WINDOW_SIZE));
         finish = reinterpret_cast<bool *>(calloc(WINDOW_SIZE, sizeof(bool)));
         buffer = reinterpret_cast<uint8_t *>(calloc(DATA_LENGTH, sizeof(uint8_t)));
         PacketLength = reinterpret_cast<uint16_t *>(calloc(WINDOW_SIZE, sizeof(uint16_t)));
         FirstHeader = reinterpret_cast<uint16_t *>(calloc(WINDOW_SIZE, sizeof(uint16_t)));
+        bzero(heartBuffer, HEADER_LENGTH);
         rawSocket = socket(AF_INET, SOCK_RAW, IPPROTO_RAW);
         int val = 1;
         if (setsockopt(rawSocket, IPPROTO_IP, IP_HDRINCL, reinterpret_cast<const void *>(&val), sizeof(int))) {
@@ -204,6 +205,8 @@ public:
     void SendRawBuffer();
 
     static uint16_t calcCheckSum(uint16_t *data, size_t len, const uint16_t *fakeHead);
+
+    void HeartBeat();
 };
 
 #endif

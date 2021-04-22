@@ -13,9 +13,9 @@ class RS {
     int DataShards, FECShards;
 
 public:
-    void encode(uint8_t **shards, int ShardLength);
+    void encode(uint8_t **shards, unsigned ShardLength);
 
-    void decode(uint8_t **shards, int ShardLength, const bool validShards[]);
+    void decode(uint8_t **shards, unsigned ShardLength, const bool validShards[]);
 
     RS(int DataShards, int FECShards) {
         this->DataShards = DataShards;

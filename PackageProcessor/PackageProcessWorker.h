@@ -7,7 +7,6 @@
 
 
 #include "../SimpleWorkQueue/SimpleWorker.h"
-#include "../RSHelper.h"
 #include "../SimpleWorkQueue/SimpleWorkQueue.h"
 
 class PackageProcessWorker : public SimpleWorker {
@@ -15,7 +14,6 @@ public:
     void work(SimpleTask* task) override;
     PackageProcessWorker();
 private:
-    RSHelper *helper;
     SimpleWorkQueue::SimpleThreadsSafeQueue *queue;
 };
 

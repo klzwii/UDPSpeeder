@@ -7,7 +7,6 @@
 
 
 #include "../SimpleWorkQueue/SimpleTask.h"
-#include "../RSHelper.h"
 #include <atomic>
 
 class PackageProcessTask : public SimpleTask {

@@ -83,7 +83,7 @@ void readFromFD() {
     fd_set readFD;
     FD_ZERO(&readFD);
     FD_SET(fd, &readFD);
-    timeval timeOut{0, 20000};
+    timeval timeOut{0, 1000};
     int tik = 0;
     while (true) {
         auto setCopy = readFD;
@@ -100,7 +100,7 @@ void readFromFD() {
             socklen_t tempLen;
             len = recvfrom(fd, buffer, 2000, 0, &tempAddr, &tempLen);
             if (rdt == nullptr) {
-                rdt = new RDT(128, 1, 1472, 0, &tempAddr, &tempLen, 10, 2000, 0, inet_addr("192.168.23.1"));
+                rdt = new RDT(512, 5, 200, 4, &tempAddr, &tempLen, 3, 30, 10, inet_addr("192.168.23.1"));
             }
             if (len < 0) {
                 perror("recv from");
@@ -117,6 +117,8 @@ void readFromFD() {
 int main() {
     // getSubnetMask();
     int one = 1;
+    std::cout << "11111" << std::endl;
+    std::cout << "11111" << std::endl;
     rawFD = socket(AF_INET, SOCK_RAW, IPPROTO_RAW);
     if (rawFD < 0) {
         perror("raw fd");
@@ -169,7 +171,7 @@ int main() {
     fd_set oriFD;
     FD_ZERO(&oriFD);
     FD_SET(queueFD, &oriFD);
-    timeval tv{0, 10000};
+    timeval tv{0, 1000};
     std::thread(readFromFD).detach();
     while(true) {
         auto fdCopy = oriFD;
@@ -177,8 +179,10 @@ int main() {
         auto selectedFD = select(queueFD + 1, &fdCopy, nullptr, nullptr, &tvCopy);
         if (selectedFD == 0) {
             //todo check all clients send buffer time out
-            if (rdt != nullptr)
-            rdt->BufferTimeOut();
+            if (rdt != nullptr) {
+                rdt->BufferTimeOut();
+                rdt->HeartBeat();
+            }
         } else if (FD_ISSET(queueFD, &fdCopy)) {
             r = recv(queueFD, buf, sizeof(buf), 0);
             if (r == 0) {

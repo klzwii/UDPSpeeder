@@ -15,5 +15,4 @@ void PackageProcessWorker::work(SimpleTask *task) {
 }
 
 PackageProcessWorker::PackageProcessWorker() {
-    helper = new RSHelper();
 }
