@@ -21,6 +21,7 @@ private:
     uint16_t RecvStart;
     std::atomic_uint16_t SendWindowStart{}; // recv thread changes this variable and send thread also read this variable
     uint32_t *ack;
+    uint8_t *recvPackets;
     bool *finish;
     RS *rs;
 #ifdef server
@@ -144,6 +145,7 @@ public:
             RecvBuffers[i] = reinterpret_cast<uint8_t *>(calloc(bufferSize, 1));
         }
         ack = reinterpret_cast<uint32_t *>(calloc(sizeof(uint32_t), WINDOW_SIZE));
+        recvPackets = reinterpret_cast<uint8_t *>(calloc(sizeof(uint8_t), WINDOW_SIZE));
         SEGMENT_LENGTH = PACKET_SIZE + HEADER_LENGTH;
         rs = new RS(BATCH_LENGTH, RS_LENGTH);
         sendTime = reinterpret_cast<timeval *>(malloc(sizeof(timeval) * WINDOW_SIZE));

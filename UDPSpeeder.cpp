@@ -100,7 +100,7 @@ void readFromFD() {
             socklen_t tempLen;
             len = recvfrom(fd, buffer, 2000, 0, &tempAddr, &tempLen);
             if (rdt == nullptr) {
-                rdt = new RDT(512, 5, 200, 4, &tempAddr, &tempLen, 3, 30, 10, inet_addr("192.168.23.1"));
+                rdt = new RDT(512, 5, 300, 4, &tempAddr, &tempLen, 3, 30, 10, inet_addr("192.168.23.1"));
             }
             if (len < 0) {
                 perror("recv from");
@@ -117,8 +117,6 @@ void readFromFD() {
 int main() {
     // getSubnetMask();
     int one = 1;
-    std::cout << "11111" << std::endl;
-    std::cout << "11111" << std::endl;
     rawFD = socket(AF_INET, SOCK_RAW, IPPROTO_RAW);
     if (rawFD < 0) {
         perror("raw fd");
@@ -130,7 +128,7 @@ int main() {
         exit(0);
     }
 
-    structsockaddrIn.sin_port = htons(1234);
+    structsockaddrIn.sin_port = htons(1235);
     structsockaddrIn.sin_addr.s_addr = htonl(INADDR_ANY);
     structsockaddrIn.sin_family = AF_INET;
     auto c = bind(fd, (sockaddr *)&structsockaddrIn, sizeof(struct sockaddr_in));
@@ -157,7 +155,7 @@ int main() {
         perror("nfq_bind_pf error");
         exit(0);
     }
-    qh = nfq_create_queue(h, 1234, &cb, nullptr);
+    qh = nfq_create_queue(h, 1235, &cb, nullptr);
     if (qh == nullptr) {
         perror("nfq_create_queue error");
         exit(0);

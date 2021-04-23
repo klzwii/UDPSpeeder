@@ -137,10 +137,17 @@ void RDT::sendBufferBySeq(uint16_t seq) {
 //non thread-safe
 void RDT::RecvBuffer(uint8_t *data) {
     auto head = header(data);
-    if(head.CRC() != crc32c::Crc32c(data + 4, SEGMENT_LENGTH - 4)) {
+    if (head.CRC() != crc32c::Crc32c(data + 4, SEGMENT_LENGTH - 4)) {
         return;
     }
-    uint16_t diff = head.SendSeq() - RecvStart;
+    uint16_t diff;
+    if (head.IsACK()) {
+        diff = head.AckSeq() - SendWindowStart;
+        if (diff != 0 && diff <= WINDOW_SIZE) {
+            SendWindowStart.store(head.AckSeq());
+        }
+    }
+    diff = head.SendSeq() - RecvStart;
     if (diff > WINDOW_SIZE || diff == 0) {
         return;
     }
@@ -149,23 +156,80 @@ void RDT::RecvBuffer(uint8_t *data) {
         RecvEnd = head.SendSeq();
     }
     uint16_t pos = head.SendSeq() % WINDOW_SIZE;
-    if (ack[pos]&(1 << head.SubSeq())) {
+    if (ack[pos] & (1 << head.SubSeq())) {
         return;
     }
     if (!ack[pos]) {
         PacketLength[pos] = head.PacketLength();
         FirstHeader[pos] = head.HeadStart();
     }
+    recvPackets[pos]++;
     ack[pos] |= (1 << head.SubSeq());
     gettimeofday(&recvTime[pos], nullptr);
-    if (head.IsACK()) {
-        diff = head.AckSeq() - SendWindowStart;
-        if (diff != 0 && diff <= WINDOW_SIZE) {
-            SendWindowStart.store(head.AckSeq());
+    uint8_t *&currentBuffer = RecvBuffers[pos];
+    memcpy(currentBuffer + head.SubSeq() * PACKET_SIZE, data + HEADER_LENGTH, PACKET_SIZE);
+    if (head.SendSeq() == (uint16_t) (RecvStart + 1)) {
+        uint16_t curSeq = RecvStart + 1;
+        while (true) {
+            bool canDump = true;
+            uint16_t curPos = curSeq % WINDOW_SIZE;
+            if (recvPackets[curPos] < BATCH_LENGTH) {
+                break;
+            }
+            uint32_t ackBits = ack[curPos];
+            if (ackBits != ((1 << BATCH_LENGTH) - 1)) {
+                int nowPackets = 0;
+                bool validShards[RS_LENGTH + BATCH_LENGTH];
+                int validPos = 0;
+                while (ackBits) {
+                    if (1 & ackBits) {
+                        ++nowPackets;
+                        validShards[validPos] = true;
+                    }
+                    ++validPos;
+                    ackBits >>= 1;
+                }
+                uint8_t *p[RS_LENGTH + BATCH_LENGTH];
+                uint8_t *&currentBuffer = RecvBuffers[curPos];
+                for (int i = 0; i < BATCH_LENGTH + RS_LENGTH; i++) {
+                    p[i] = currentBuffer + PACKET_SIZE * i;
+                }
+                canDump = rdtDecode(p, validShards, PacketLength[curPos]);
+            }
+            if (!canDump) {
+                break;
+            } else {
+                RecvStart = curSeq;
+                ack[curPos] = 0;
+                recvPackets[curPos] = 0;
+                uint16_t packetLength = PacketLength[curPos];
+                if (packetLength != 0) {
+                    uint16_t recvOffset = 4;
+                    uint16_t copyLength = FirstHeader[curPos] - 4;
+                    memcpy(rawBuffer + rawOffset, RecvBuffers[curPos] + recvOffset, copyLength);
+                    rawOffset += copyLength;
+                    recvOffset += copyLength;
+                    SendRawBuffer();
+                    while (recvOffset != packetLength) {
+                        uint16_t dataLeft = packetLength - recvOffset;
+                        if (dataLeft >= sizeof(struct iphdr)) {
+                            auto *hdr = reinterpret_cast<struct iphdr *>(RecvBuffers[curPos] + recvOffset);
+                            copyLength = be16toh(hdr->tot_len);
+                        }
+                        copyLength = std::min((uint16_t) (packetLength - recvOffset), copyLength);
+                        memcpy(rawBuffer + rawOffset, RecvBuffers[curPos] + recvOffset, copyLength);
+                        rawOffset += copyLength;
+                        recvOffset += copyLength;
+                        SendRawBuffer();
+                    }
+                }
+            }
+            if (curSeq == RecvEnd) {
+                break;
+            }
+            ++curSeq;
         }
     }
-    uint8_t* &currentBuffer = RecvBuffers[pos];
-    memcpy(currentBuffer + head.SubSeq() * PACKET_SIZE, data + HEADER_LENGTH, PACKET_SIZE);
 }
 
 #ifdef client
@@ -269,61 +333,61 @@ void RDT::DumpDataThread(uint16_t seq, RDT* rdt, int id) {
 }
 
 bool RDT::DumpData() {
-    uint16_t start = RecvStart;
-    wg.store(0);
-    uint16_t end = RecvEnd;
-    int id = 0;
-    bool flg = false;
-    for (uint16_t i = start + 1; end - i <= WINDOW_SIZE; ++i) {
-        if (finish[i % WINDOW_SIZE]) {
-            continue;
-        }
-        if (id >= THREAD_NUM) {
-            break;
-        }
-        int curWG = wg.load();
-        while (!wg.compare_exchange_strong(curWG, curWG + 1)) {
-            curWG = wg.load();
-        }
-        std::thread(DumpDataThread, i, this, id).detach();
-    }
-    while (wg.load() != 0) {
-        std::this_thread::yield();
-    }
-    for (uint16_t i = start + 1; end - i <= WINDOW_SIZE; ++i) {
-        auto pos = i % WINDOW_SIZE;
-        if (finish[pos]) {
-            flg = true;
-            uint16_t packetLength = PacketLength[pos];
-            if (packetLength != 0) {
-                uint16_t recvOffset = 4;
-                uint16_t copyLength = FirstHeader[pos] - 4;
-                memcpy(rawBuffer + rawOffset, RecvBuffers[pos] + recvOffset, copyLength);
-                rawOffset += copyLength;
-                recvOffset += copyLength;
-                SendRawBuffer();
-                while (recvOffset != packetLength) {
-                    uint16_t dataLeft = packetLength - recvOffset;
-                    if (dataLeft >= sizeof(struct iphdr)) {
-                        auto *hdr = reinterpret_cast<struct iphdr *>(RecvBuffers[pos] + recvOffset);
-                        copyLength = be16toh(hdr->tot_len);
-                    }
-                    copyLength = std::min((uint16_t) (packetLength - recvOffset), copyLength);
-                    memcpy(rawBuffer + rawOffset, RecvBuffers[pos] + recvOffset, copyLength);
-                    rawOffset += copyLength;
-                    recvOffset += copyLength;
-                    SendRawBuffer();
-                }
-            }
-            RecvStart = i;
-            recvTime[pos] = timeval{0, 0};
-            finish[pos] = false;
-            ack[pos] = 0;
-        } else {
-            break;
-        }
-    }
-    return flg;
+//    uint16_t start = RecvStart;
+//    wg.store(0);
+//    uint16_t end = RecvEnd;
+//    int id = 0;
+//    bool flg = false;
+//    for (uint16_t i = start + 1; end - i <= WINDOW_SIZE; ++i) {
+//        if (finish[i % WINDOW_SIZE]) {
+//            continue;
+//        }
+//        if (id >= THREAD_NUM) {
+//            break;
+//        }
+//        int curWG = wg.load();
+//        while (!wg.compare_exchange_strong(curWG, curWG + 1)) {
+//            curWG = wg.load();
+//        }
+//        std::thread(DumpDataThread, i, this, id).detach();
+//    }
+//    while (wg.load() != 0) {
+//        std::this_thread::yield();
+//    }
+//    for (uint16_t i = start + 1; end - i <= WINDOW_SIZE; ++i) {
+//        auto pos = i % WINDOW_SIZE;
+//        if (finish[pos]) {
+//            flg = true;
+//            uint16_t packetLength = PacketLength[pos];
+//            if (packetLength != 0) {
+//                uint16_t recvOffset = 4;
+//                uint16_t copyLength = FirstHeader[pos] - 4;
+//                memcpy(rawBuffer + rawOffset, RecvBuffers[pos] + recvOffset, copyLength);
+//                rawOffset += copyLength;
+//                recvOffset += copyLength;
+//                SendRawBuffer();
+//                while (recvOffset != packetLength) {
+//                    uint16_t dataLeft = packetLength - recvOffset;
+//                    if (dataLeft >= sizeof(struct iphdr)) {
+//                        auto *hdr = reinterpret_cast<struct iphdr *>(RecvBuffers[pos] + recvOffset);
+//                        copyLength = be16toh(hdr->tot_len);
+//                    }
+//                    copyLength = std::min((uint16_t) (packetLength - recvOffset), copyLength);
+//                    memcpy(rawBuffer + rawOffset, RecvBuffers[pos] + recvOffset, copyLength);
+//                    rawOffset += copyLength;
+//                    recvOffset += copyLength;
+//                    SendRawBuffer();
+//                }
+//            }
+//            RecvStart = i;
+//            recvTime[pos] = timeval{0, 0};
+//            finish[pos] = false;
+//            ack[pos] = 0;
+//        } else {
+//            break;
+//        }
+//    }
+//    return flg;
 }
 
 void RDT::SendRawBuffer() {

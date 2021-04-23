@@ -22,7 +22,7 @@ public:
         this->isFinished.store(false);
     };
     ~PackageProcessTask() override {
-        free(bytes);
+        delete (bytes);
     }
 };
 
