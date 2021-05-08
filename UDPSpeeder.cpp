@@ -12,20 +12,86 @@
 #include <libnetfilter_queue/libnetfilter_queue_ipv4.h>
 #include <linux/netfilter.h>
 #include <map>
+#include <linux/if_tun.h>
+#include <linux/if.h>
+#include <sys/ioctl.h>
+#include <csignal>
+#include <fcntl.h>
 #include "RDT.h"
 
 struct sockaddr_in structsockaddrIn{}, sout{};
 socklen_t sockLen;
 int rawFD;
-std::map<uint16_t, RDT*>rdtMap;
-RDT* rdt = nullptr;
+std::map<uint16_t, RDT *> rdtMap;
+RDT *rdt = nullptr;
 
 int fd;
 
-bool checkIPOut(struct iphdr* iph) {
+int tun_alloc(char dev[IFNAMSIZ]) {
+    struct ifreq ifr{};
+    int fd, err;
+    if ((fd = open("/dev/net/tun", O_RDWR)) < 0) {
+        perror("open");
+        return -1;
+    }
+    bzero(&ifr, sizeof(ifr));
+    ifr.ifr_flags = IFF_TUN | IFF_NO_PI;
+    if (*dev) {
+        strncpy(ifr.ifr_name, dev, IFNAMSIZ);
+    }
+    if ((err = ioctl(fd, TUNSETIFF, (void *) &ifr)) < 0) {
+        perror("ioctl TUNSETIFF");
+        close(fd);
+        return err;
+    }
+    strcpy(dev, ifr.ifr_name);
+    std::cout << ifr.ifr_name << std::endl;
+    return fd;
+}
+
+int set_stack_attribute(char *dev) {
+    struct ifreq ifr{};
+    struct sockaddr_in addr{};
+    int sockfd, err = -1;
+    bzero(&addr, sizeof(addr));
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = inet_addr("192.168.62.1");
+    bzero(&ifr, sizeof(ifr));
+    strcpy(ifr.ifr_name, dev);
+    bcopy(&addr, &ifr.ifr_addr, sizeof(addr));
+    sockfd = socket(AF_INET, SOCK_RAW, IPPROTO_RAW);
+    if (sockfd < 0) {
+        perror("socket");
+        return -1;
+    }
+    if ((err = ioctl(sockfd, SIOCSIFADDR, (void *) &ifr)) < 0) {
+        perror("ioctl SIOSIFADDR");
+        goto done;
+    }
+    if ((err = ioctl(sockfd, SIOCGIFFLAGS, (void *) &ifr)) < 0) {
+        perror("ioctl SIOCGIFADDR");
+        goto done;
+    }
+    ifr.ifr_flags |= IFF_UP;
+    if ((err = ioctl(sockfd, SIOCSIFFLAGS, (void *) &ifr)) < 0) {
+        perror("ioctl SIOCSIFFLAGS");
+        goto done;
+    }
+    inet_pton(AF_INET, "255.255.255.0", &addr.sin_addr);
+    bcopy(&addr, &ifr.ifr_netmask, sizeof(addr));
+    if ((err = ioctl(sockfd, SIOCSIFNETMASK, (void *) &ifr)) < 0) {
+        perror("ioctl SIOCSIFNETMASK");
+        goto done;
+    }
+    done:
+    close(sockfd);
+    return err;
+}
+
+bool checkIPOut(struct iphdr *iph) {
     auto k = be32toh(iph->daddr);
-    auto *t = (uint8_t*)&k;
-    auto fir = *(t+3), sec = *(t+2);
+    auto *t = (uint8_t *) &k;
+    auto fir = *(t + 3), sec = *(t + 2);
     if (fir == 127 || fir == 10) {
         return false;
     }
@@ -44,39 +110,6 @@ bool checkIPOut(struct iphdr* iph) {
     return true;
 }
 
-int cb(struct nfq_q_handle *gh, struct nfgenmsg *nfmsg, struct nfq_data *nfad, void *data) {
-    struct iphdr *iph;
-    struct nfqnl_msg_packet_hdr *ph;
-    ph = nfq_get_msg_packet_hdr(nfad);
-    unsigned char* payload;
-    if (ph) {
-        uint32_t id = ntohl(ph->packet_id);
-        // todo check if dest ip exist in IP pool
-        int r = nfq_get_payload(nfad, &payload);
-        if (r >= sizeof(struct iphdr)) {
-            iph = reinterpret_cast<struct iphdr*>(payload);
-            std::string s;
-            switch (iph->protocol) {
-                case IPPROTO_ICMP:
-                    s = "icmp";
-                    break;
-                case IPPROTO_UDP:
-                    s = "udp";
-                    break;
-                case IPPROTO_TCP:
-                    s = "tcp";
-                    break;
-            }
-//            printf("get %s packets, length %d\n", s.c_str(), (int)be16toh(iph->tot_len));
-            rdt->AddData(payload, r, true);
-            rdt->BufferTimeOut();
-            return nfq_set_verdict(gh, id, NF_DROP, 0, nullptr);
-        }
-    }
-    return 0;
-}
-
-
 void readFromFD() {
     uint8_t buffer[2000];
     int len;
@@ -84,7 +117,6 @@ void readFromFD() {
     FD_ZERO(&readFD);
     FD_SET(fd, &readFD);
     timeval timeOut{0, 1000};
-    int tik = 0;
     while (true) {
         auto setCopy = readFD;
         auto tvCopy = timeOut;
@@ -93,21 +125,17 @@ void readFromFD() {
             if (rdt == nullptr) {
                 continue;
             }
-            rdt->TimeOut();
-            rdt->DumpData();
         } else if (FD_ISSET(fd, &setCopy)) {
             sockaddr tempAddr{};
             socklen_t tempLen;
             len = recvfrom(fd, buffer, 2000, 0, &tempAddr, &tempLen);
             if (rdt == nullptr) {
-                rdt = new RDT(512, 5, 300, 4, &tempAddr, &tempLen, 3, 30, 10, inet_addr("192.168.23.1"));
+                rdt = new RDT(512, 5, 300, 4, &tempAddr, &tempLen, 3, 30, 10, inet_addr("192.168.62.2"));
             }
             if (len < 0) {
                 perror("recv from");
             }
             rdt->RecvBuffer(buffer);
-            rdt->DumpData();
-            rdt->TimeOut();
         } else {
             perror("select");
         }
@@ -116,7 +144,7 @@ void readFromFD() {
 
 int main() {
     // getSubnetMask();
-    int one = 1;
+    galois::initGF();
     rawFD = socket(AF_INET, SOCK_RAW, IPPROTO_RAW);
     if (rawFD < 0) {
         perror("raw fd");
@@ -127,73 +155,41 @@ int main() {
         perror("open socket");
         exit(0);
     }
-
-    structsockaddrIn.sin_port = htons(1235);
+    structsockaddrIn.sin_port = htons(1234);
     structsockaddrIn.sin_addr.s_addr = htonl(INADDR_ANY);
     structsockaddrIn.sin_family = AF_INET;
-    auto c = bind(fd, (sockaddr *)&structsockaddrIn, sizeof(struct sockaddr_in));
+    auto c = bind(fd, (sockaddr *) &structsockaddrIn, sizeof(struct sockaddr_in));
     if (c < 0) {
         perror("bind");
         exit(0);
     }
     RDT::init(fd);
+    char devName[IFNAMSIZ];
+    bzero(devName, IFNAMSIZ);
+    int hijackFD = tun_alloc(devName);
+    set_stack_attribute(devName);
     struct nfq_handle *h;
     struct nfq_q_handle *qh;
-    int r;
-    char buf[10240];
-    //auto f = popen("iptables -A OUTPUT -j NFQUEUE 1234", "r");
-    h = nfq_open();
-    if (h == nullptr) {
-        perror("nfq_open error");
-        exit(0);
-    }
-    if (nfq_unbind_pf(h, AF_INET) != 0) {
-        perror("nfq_unbind_pf error");
-        exit(0);
-    }
-    if (nfq_bind_pf(h, AF_INET) != 0) {
-        perror("nfq_bind_pf error");
-        exit(0);
-    }
-    qh = nfq_create_queue(h, 1235, &cb, nullptr);
-    if (qh == nullptr) {
-        perror("nfq_create_queue error");
-        exit(0);
-    }
-
-    if (nfq_set_mode(qh, NFQNL_COPY_PACKET, 0xffff) != 0) {
-        perror("nfq_set_mod error");
-        exit(0);
-    }
-    int queueFD = nfq_fd(h);
+    uint8_t buf[2000];
     fd_set oriFD;
     FD_ZERO(&oriFD);
-    FD_SET(queueFD, &oriFD);
+    FD_SET(hijackFD, &oriFD);
     timeval tv{0, 1000};
     std::thread(readFromFD).detach();
-    while(true) {
+    while (true) {
         auto fdCopy = oriFD;
         auto tvCopy = tv;
-        auto selectedFD = select(queueFD + 1, &fdCopy, nullptr, nullptr, &tvCopy);
+        auto selectedFD = select(hijackFD + 1, &fdCopy, nullptr, nullptr, &tvCopy);
         if (selectedFD == 0) {
-            //todo check all clients send buffer time out
             if (rdt != nullptr) {
                 rdt->BufferTimeOut();
-                rdt->HeartBeat();
             }
-        } else if (FD_ISSET(queueFD, &fdCopy)) {
-            r = recv(queueFD, buf, sizeof(buf), 0);
-            if (r == 0) {
-                printf("recv return 0. exit");
-                break;
-            } else if (r < 0) {
-                perror("recv error");
-            } else {
-                nfq_handle_packet(h, buf, r);
-            }
+        } else if (FD_ISSET(hijackFD, &fdCopy)) {
+            auto r = read(hijackFD, buf, 2000);
+            rdt->AddData(buf, r, true);
+            rdt->BufferTimeOut();
         } else {
             perror("select");
         }
     }
-    return 0;
 }

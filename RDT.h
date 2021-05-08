@@ -19,7 +19,6 @@ class RDT {
 private:
     uint16_t RecvEnd;
     uint16_t RecvStart;
-    std::atomic_uint16_t SendWindowStart{}; // recv thread changes this variable and send thread also read this variable
     uint32_t *ack;
     uint8_t *recvPackets;
     bool *finish;
@@ -29,16 +28,15 @@ private:
     sockaddr *sendSockAddr;
     socklen_t *sockLen;
 #endif
+#ifdef debug
+    bool *printed;
+#endif
     uint8_t **RecvBuffers;
     uint16_t SendWindowEnd;
     uint16_t uuid = 0;
-    uint8_t **sendBuffers;
-    uint16_t firstHead;
+    uint8_t *sendBuffer;
     uint8_t rawBuffer[2000]{};
     uint16_t rawOffset = 0;
-    timeval *sendTime;
-    timeval *recvTime;
-    timeval lastSendTime;
 
     void rdtEncode(uint8_t **encodeShards, uint16_t length);
 
@@ -46,46 +44,37 @@ private:
 
 #ifdef client
     int sendFD;
+    int hijackFD;
     std::atomic_bool threadExit{false};
     static void RecvThread(RDT *rdt);
 #endif
     uint8_t *buffer;
     timeval bufferStartTime{0, 0};
     size_t offset = 0;
-    uint THREAD_NUM;
     uint WINDOW_SIZE;
     uint BATCH_LENGTH;
     uint PACKET_SIZE;
     uint RS_LENGTH;
     uint SEGMENT_LENGTH;
-    uint8_t heartBuffer[HEADER_LENGTH];
     uint DATA_LENGTH;
     uint32_t RESEND_THRESHOLD;
     uint32_t RECOVER_THRESHOLD;
     uint32_t BUFFER_THRESHOLD;
-    std::atomic_int wg{};
     in_addr_t fakeIP;
     int rawSocket;
     uint16_t *PacketLength;
-    uint16_t *FirstHeader;
     static void reCalcChecksum(uint16_t *payLoad, size_t len);
 public:
-    void sendBufferBySeq(uint16_t seq);
 #ifdef server
     static void init(int fd);
 #endif
     ~RDT() {
-        for (int i = 0; i < WINDOW_SIZE; i ++) {
-            delete sendBuffers[i];
-        }
-        delete sendBuffers;
+        delete sendBuffer;
         for (int i = 0; i < WINDOW_SIZE; i ++) {
             delete RecvBuffers[i];
         }
         delete RecvBuffers;
         delete ack;
-        delete sendTime;
-        delete recvTime;
         delete finish;
         delete buffer;
         delete PacketLength;
@@ -101,7 +90,7 @@ public:
 
 #ifdef client
     RDT(uint WINDOW_SIZE, uint BATCH_LENGTH, uint PACKET_SIZE, uint RS_LENGTH, in_addr_t SendAddr, in_port_t SendPort,
-        uint32_t RECOVER_THRESHOLD, uint32_t RESEND_THRESHOLD, uint32_t BUFFER_THRESHOLD, in_addr_t fakeIP)
+        uint32_t RECOVER_THRESHOLD, uint32_t RESEND_THRESHOLD, uint32_t BUFFER_THRESHOLD, in_addr_t fakeIP, int hijackFD)
 #endif
 #ifdef server
 
@@ -121,7 +110,6 @@ public:
         sendSockAddr = sockADDR;
         this->sockLen = sockLen;
 #endif
-        SendWindowStart = -1;
         SendWindowEnd = -1;
         RecvStart = -1;
         RecvEnd = -1;
@@ -134,12 +122,8 @@ public:
         DATA_LENGTH = PACKET_SIZE * BATCH_LENGTH;
         SEGMENT_LENGTH = PACKET_SIZE + HEADER_LENGTH;
         this->RS_LENGTH = RS_LENGTH;
-        this->THREAD_NUM = 4;
         uint bufferSize = SEGMENT_LENGTH * (RS_LENGTH + BATCH_LENGTH);
-        sendBuffers = reinterpret_cast<uint8_t**>(calloc(sizeof(void *), WINDOW_SIZE));
-        for (int i = 0; i < WINDOW_SIZE; i ++) {
-            sendBuffers[i] = reinterpret_cast<uint8_t*>(calloc(bufferSize, 1));
-        }
+        sendBuffer = reinterpret_cast<uint8_t *>(calloc(bufferSize, 1));
         RecvBuffers = reinterpret_cast<uint8_t **>(calloc(sizeof(void *), WINDOW_SIZE));
         for (int i = 0; i < WINDOW_SIZE; i++) {
             RecvBuffers[i] = reinterpret_cast<uint8_t *>(calloc(bufferSize, 1));
@@ -148,25 +132,24 @@ public:
         recvPackets = reinterpret_cast<uint8_t *>(calloc(sizeof(uint8_t), WINDOW_SIZE));
         SEGMENT_LENGTH = PACKET_SIZE + HEADER_LENGTH;
         rs = new RS(BATCH_LENGTH, RS_LENGTH);
-        sendTime = reinterpret_cast<timeval *>(malloc(sizeof(timeval) * WINDOW_SIZE));
-        recvTime = reinterpret_cast<timeval *>(malloc(sizeof(timeval) * WINDOW_SIZE));
         finish = reinterpret_cast<bool *>(calloc(WINDOW_SIZE, sizeof(bool)));
         buffer = reinterpret_cast<uint8_t *>(calloc(DATA_LENGTH, sizeof(uint8_t)));
         PacketLength = reinterpret_cast<uint16_t *>(calloc(WINDOW_SIZE, sizeof(uint16_t)));
-        FirstHeader = reinterpret_cast<uint16_t *>(calloc(WINDOW_SIZE, sizeof(uint16_t)));
-        bzero(heartBuffer, HEADER_LENGTH);
         rawSocket = socket(AF_INET, SOCK_RAW, IPPROTO_RAW);
         int val = 1;
         if (setsockopt(rawSocket, IPPROTO_IP, IP_HDRINCL, reinterpret_cast<const void *>(&val), sizeof(int))) {
             perror("setsockopt() error");
             exit(-1);
         }
-        firstHead = DATA_LENGTH;
+#ifdef debug
+        printed = reinterpret_cast<bool*>(calloc(sizeof(bool), WINDOW_SIZE));
+#endif
         if (rawSocket < 0) {
             perror("open raw socket");
         }
         this->fakeIP = fakeIP;
 #ifdef client
+        this->hijackFD = hijackFD;
         unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
         std::mt19937 rand_num(seed);
         std::uniform_int_distribution<uint16_t> dist;
@@ -192,14 +175,6 @@ public:
 
     void RecvBuffer(uint8_t *data);
 
-    bool DumpData();
-
-    static void DumpDataBySeq(uint16_t curSeq, RDT* rdt, int id);
-
-    static void DumpDataThread(uint16_t seq, RDT* rdt, int id);
-
-    void TimeOut();
-
     void BufferTimeOut();
 
     void SendBuffer();
@@ -208,7 +183,6 @@ public:
 
     static uint16_t calcCheckSum(uint16_t *data, size_t len, const uint16_t *fakeHead);
 
-    void HeartBeat();
 };
 
 #endif
