@@ -4,24 +4,19 @@
 
 #ifndef UDPWINCLIENT_HEADERCONST_H
 #define UDPWINCLIENT_HEADERCONST_H
-#define HEADER_LENGTH 16
-#include <string>
-
+#define HEADER_LENGTH 12
 struct header {
 private:
     static const uint8_t FIN = 0b1;
     static const uint8_t ACK = 0b10;
     static const uint8_t SYN = 0b100;
     static const uint8_t RST = 0b1000;
-//    uint32_t crc;  // 4
-//    uint16_t sendSeq; // 6
-//    uint16_t recvStart; // 8
-//    uint16_t packetLength; // 10
-//    uint8_t subSeq; // 11
-//    uint8_t symbol; // 12
-//    uint8_t realSeq; //13
-//    uint8_t rsSeq; //14
-//    uint16_t headStart; //15
+//    uint32_t crc;  // 0 - 3
+//    uint16_t sendSeq; // 4 - 5
+//    uint16_t packetLength; // 6 - 7
+//    uint8_t subSeq; // 8
+//    uint8_t symbol; // 9
+//    uint16_t uuid; // 10 - 11
     uint8_t *addr;
 public:
     explicit header(uint8_t *bytes) {
@@ -36,64 +31,69 @@ public:
     void SetSendSeq(uint16_t sendSeq) {
         *reinterpret_cast<uint16_t*>(addr + 4) = sendSeq;
     }
-    void SetAckSeq(uint16_t ackSeq) {
-        *reinterpret_cast<uint16_t*>(addr + 6) = ackSeq;
-    }
     void SetPacketLength(uint16_t packetLength) {
-        *reinterpret_cast<uint16_t*>(addr + 8) = packetLength;
+        *reinterpret_cast<uint16_t *>(addr + 6) = packetLength;
     }
+
     void SetSubSeq(uint8_t subSeq) {
-        *reinterpret_cast<uint8_t*>(addr + 10) = subSeq;
+        *reinterpret_cast<uint8_t *>(addr + 8) = subSeq;
     }
+
     void SetFIN() {
-        *reinterpret_cast<uint8_t*>(addr + 11) |= FIN;
+        *reinterpret_cast<uint8_t *>(addr + 9) |= FIN;
     }
+
     void SetACK() {
-        *reinterpret_cast<uint8_t*>(addr + 11) |= ACK;
+        *reinterpret_cast<uint8_t *>(addr + 9) |= ACK;
     }
-    void SetRealSeq(uint8_t realSeq) {
-        *reinterpret_cast<uint8_t*>(addr + 12) = realSeq;
+
+    void SetSYN() {
+        *reinterpret_cast<uint8_t *>(addr + 9) |= SYN;
     }
-    void SetRSSeq(uint8_t rsSeq) {
-        *reinterpret_cast<uint8_t*>(addr + 13) = rsSeq;
+
+    void SetRST() {
+        *reinterpret_cast<uint8_t *>(addr + 9) |= RST;
     }
-    void SetHeadStart(uint16_t headStart) {
-        *reinterpret_cast<uint16_t*>(addr + 14) = headStart;
+
+    void SetUUID(uint16_t uuid) {
+        *reinterpret_cast<uint16_t *>(addr + 10) = uuid;
     }
+
     uint32_t CRC() {
-        return *reinterpret_cast<uint32_t*>(addr);
+        return *reinterpret_cast<uint32_t *>(addr);
     }
+
     uint16_t SendSeq() {
-        return *reinterpret_cast<uint16_t*>(addr + 4);
+        return *reinterpret_cast<uint16_t *>(addr + 4);
     }
-    uint16_t AckSeq() {
-        return *reinterpret_cast<uint16_t*>(addr + 6);
-    }
+
     uint16_t PacketLength() {
-        return *reinterpret_cast<uint16_t*>(addr + 8);
+        return *reinterpret_cast<uint16_t *>(addr + 6);
     }
+
     uint8_t SubSeq() {
-        return *reinterpret_cast<uint8_t*>(addr + 10);
+        return *reinterpret_cast<uint8_t *>(addr + 8);
     }
-    uint8_t RealSeq() {
-        return *reinterpret_cast<uint8_t*>(addr + 12);
-    }
-    uint8_t RSSeq() {
-        return *reinterpret_cast<uint8_t*>(addr + 13);
-    }
-    uint16_t HeadStart() {
-        return *reinterpret_cast<uint16_t*>(addr + 14);
-    }
+
     bool IsFin() {
-        return *reinterpret_cast<uint8_t*>(addr + 11) & FIN;
+        return *reinterpret_cast<uint8_t *>(addr + 9) & FIN;
     }
+
     bool IsACK() {
-        return *reinterpret_cast<uint8_t*>(addr + 11) & ACK;
+        return *reinterpret_cast<uint8_t *>(addr + 9) & ACK;
     }
-    std::string toStr() {
-        char buffer[200];
-        sprintf(buffer, "SendSeq: %d SubSeq: %d", SendSeq(), (int)SubSeq());
-        return buffer;
+
+    bool IsSYN() {
+        return *reinterpret_cast<uint8_t *>(addr + 9) & SYN;
+    }
+
+    bool IsRST() {
+        return *reinterpret_cast<uint8_t *>(addr + 9) & RST;
+    }
+
+    uint16_t UUID() {
+        return *reinterpret_cast<uint16_t *>(addr + 10);
     }
 };
+
 #endif //UDPWINCLIENT_HEADERCONST_H

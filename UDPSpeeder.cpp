@@ -4,18 +4,15 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <linux/ip.h>
-#include <ifaddrs.h>
 #include "HeaderConst.h"
+#include "Connection.h"
 #include <arpa/inet.h>
 #include <thread>
-#include <libnetfilter_queue/libnetfilter_queue.h>
-#include <libnetfilter_queue/libnetfilter_queue_ipv4.h>
-#include <linux/netfilter.h>
 #include <map>
 #include <linux/if_tun.h>
+#include "NAT.h"
 #include <linux/if.h>
 #include <sys/ioctl.h>
-#include <csignal>
 #include <fcntl.h>
 #include "RDT.h"
 
@@ -112,7 +109,7 @@ bool checkIPOut(struct iphdr *iph) {
 
 void readFromFD() {
     uint8_t buffer[2000];
-    int len;
+    ssize_t len;
     fd_set readFD;
     FD_ZERO(&readFD);
     FD_SET(fd, &readFD);
@@ -129,13 +126,31 @@ void readFromFD() {
             sockaddr tempAddr{};
             socklen_t tempLen;
             len = recvfrom(fd, buffer, 2000, 0, &tempAddr, &tempLen);
-            if (rdt == nullptr) {
-                rdt = new RDT(512, 5, 300, 4, &tempAddr, &tempLen, 3, 30, 10, inet_addr("192.168.62.2"));
-            }
             if (len < 0) {
-                perror("recv from");
+                perror("recv");
+                continue;
             }
-            rdt->RecvBuffer(buffer);
+            auto head = header(buffer);
+            auto *conn = Connection::getConn(head.UUID());
+            if (head.IsACK() || head.IsSYN()) {
+                int sendBack = Connection::startConn(buffer, &tempAddr, &tempLen);
+                if (sendBack != 0) {
+                    auto ret = sendto(fd, buffer, sendBack, 0, &tempAddr, tempLen);
+                    if (ret < 0) {
+                        perror("send back ret");
+                    } else {
+                        printf("send back bytes %d\n", sendBack);
+                    }
+                }
+            } else if (conn != nullptr) {
+                if (rdt == nullptr) {
+                    rdt = conn->rdt;
+                }
+                conn->RecvBuffer(buffer);
+            } else {
+                printf("fatal invalid uuid\n");
+                continue;
+            }
         } else {
             perror("select");
         }

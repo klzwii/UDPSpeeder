@@ -57,8 +57,6 @@ private:
     uint RS_LENGTH;
     uint SEGMENT_LENGTH;
     uint DATA_LENGTH;
-    uint32_t RESEND_THRESHOLD;
-    uint32_t RECOVER_THRESHOLD;
     uint32_t BUFFER_THRESHOLD;
     in_addr_t fakeIP;
     int rawSocket;
@@ -95,7 +93,7 @@ public:
 #ifdef server
 
     RDT(uint WINDOW_SIZE, uint BATCH_LENGTH, uint PACKET_SIZE, uint RS_LENGTH, sockaddr *sockADDR, socklen_t *sockLen,
-        uint32_t RECOVER_THRESHOLD, uint32_t RESEND_THRESHOLD, uint32_t BUFFER_THRESHOLD, in_addr_t fakeIP)
+        uint32_t BUFFER_THRESHOLD, in_addr_t fakeIP, uint16_t clientSeq, uint16_t serverSeq)
 #endif
     {
         if ((WINDOW_SIZE & -WINDOW_SIZE) != WINDOW_SIZE) {
@@ -110,14 +108,12 @@ public:
         sendSockAddr = sockADDR;
         this->sockLen = sockLen;
 #endif
-        SendWindowEnd = -1;
-        RecvStart = -1;
-        RecvEnd = -1;
+        SendWindowEnd = serverSeq;
+        RecvStart = clientSeq;
+        RecvEnd = clientSeq;
         this->WINDOW_SIZE = WINDOW_SIZE;
         this->BATCH_LENGTH = BATCH_LENGTH;
         this->PACKET_SIZE = PACKET_SIZE;
-        this->RECOVER_THRESHOLD = RECOVER_THRESHOLD;
-        this->RESEND_THRESHOLD = RESEND_THRESHOLD;
         this->BUFFER_THRESHOLD = BUFFER_THRESHOLD;
         DATA_LENGTH = PACKET_SIZE * BATCH_LENGTH;
         SEGMENT_LENGTH = PACKET_SIZE + HEADER_LENGTH;

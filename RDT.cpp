@@ -88,16 +88,11 @@ void RDT::SendBuffer() {
         auto head = header(currentBuffer + i * SEGMENT_LENGTH);
         head.SetPacketLength(offset);
         head.SetSendSeq(SendWindowEnd);
-        head.SetRSSeq(RS_LENGTH);
         head.SetSubSeq(i);
         head.SetCRC(crc32c::Crc32c(currentBuffer + i * SEGMENT_LENGTH + 4, SEGMENT_LENGTH - 4));
     }
     for (int i = 0; i < BATCH_LENGTH + RS_LENGTH; i++) {
         auto head = header(currentBuffer + i * SEGMENT_LENGTH);
-        if (head.AckSeq() != RecvStart) {
-            head.SetAckSeq(RecvStart);
-            head.SetCRC(crc32c::Crc32c(currentBuffer + i * SEGMENT_LENGTH + 4, SEGMENT_LENGTH - 4));
-        }
 #ifdef lossRate
         if (rand() % 10000 < lossRate * 10000) {
             continue;
