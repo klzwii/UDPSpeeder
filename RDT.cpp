@@ -13,15 +13,6 @@
 int RDT::serverFD = 0;
 #endif
 
-
-long long operator - (const timeval &a, const timeval &b) {
-    long long t = (a.tv_sec - b.tv_sec) * 1000 + (a.tv_usec - b.tv_usec) / 1000;
-    if (t < 0) {
-        t += 60 * 60 * 24 * 1000;
-    }
-    return t;
-}
-
 uint16_t RDT::calcCheckSum(uint16_t *data, size_t len, const uint16_t *fakeHead) {
     uint32_t cksum = 0;
     if (fakeHead != nullptr) {
@@ -285,19 +276,21 @@ void RDT::SendRawBuffer() {
     rawOffset = 0;
 }
 
-void RDT::AddData(uint8_t *data, size_t length, bool initial) {
+bool RDT::AddData(uint8_t *data, size_t length) {
+    bool ret = false;
     if (offset == 0) {
         offset = 4;
-        gettimeofday(&bufferStartTime, nullptr);
+        ret = true;
     }
     if (DATA_LENGTH - offset < length) {
         SendBuffer();
         offset = 0;
-        AddData(data, length, true);
-        return;
+        AddData(data, length);
+        return true;
     }
     memcpy(this->buffer + offset, data, length);
     offset += length;
+    return ret;
 }
 
 
@@ -306,12 +299,8 @@ void RDT::BufferTimeOut() {
     if (!offset) {
         return;
     }
-    timeval curTime{};
-    gettimeofday(&curTime, nullptr);
-    if (curTime - bufferStartTime > BUFFER_THRESHOLD) {
-        SendBuffer();
-        offset = 0;
-    }
+    SendBuffer();
+    offset = 0;
 }
 
 bool RDT::rdtDecode(uint8_t *decodeShards[], const bool *validShards, uint16_t length) {

@@ -67,15 +67,15 @@ public:
     static void init(int fd);
 #endif
     ~RDT() {
-        delete sendBuffer;
-        for (int i = 0; i < WINDOW_SIZE; i ++) {
-            delete RecvBuffers[i];
+        free(sendBuffer);
+        for (int i = 0; i < WINDOW_SIZE; i++) {
+            free(RecvBuffers[i]);
         }
-        delete RecvBuffers;
-        delete ack;
-        delete finish;
-        delete buffer;
-        delete PacketLength;
+        free(RecvBuffers);
+        free(ack);
+        free(finish);
+        free(buffer);
+        free(PacketLength);
 #ifdef client
         threadExit.store(false);
         while (threadExit.load()) {
@@ -167,7 +167,7 @@ public:
 #endif
     };
 
-    void AddData(uint8_t *buffer, size_t length, bool initial);
+    bool AddData(uint8_t *buffer, size_t length);
 
     void RecvBuffer(uint8_t *data);
 

@@ -4,8 +4,12 @@
 
 #include <arpa/inet.h>
 #include "Connection.h"
+#include "LRULinkedList.h"
 
-Connection *Connection::connectionArray[65536];
+std::map<uint16_t, Connection *>Connection::connectionArray;
+std::map<in_addr_t, uint16_t>Connection::IP2UUID;
+IPPool *Connection::ipPool = nullptr;
+LRULinkedList *Connection::lru = new LRULinkedList();
 
 bool operator==(const sockaddr_in &a, const sockaddr_in &b) {
     return a.sin_addr.s_addr == b.sin_addr.s_addr && a.sin_port == b.sin_port && a.sin_family == b.sin_family;
@@ -18,7 +22,7 @@ int Connection::startConn(uint8_t *buffer, sockaddr *sockAddr, const socklen_t *
     Connection *curConn = connectionArray[uuid];
     if (curConn == nullptr || *tempSock == *(sockaddr_in *) sockAddr) {
         if (curConn == nullptr) {
-            curConn = new Connection();
+            curConn = new Connection(uuid);
             connectionArray[uuid] = curConn;
         }
         *(curConn->sock) = *(sockaddr_in *) sockAddr;
@@ -71,10 +75,13 @@ int Connection::startConn(uint8_t *buffer, sockaddr *sockAddr, const socklen_t *
                         break;
                     }
                     curConn->CurrentState = CLIENT_STATE_ESTABLISHED;
+                    in_addr_t assignedIP = ipPool->getIP();
+                    IP2UUID[assignedIP] = uuid;
                     curConn->rdt = new RDT(curConn->WindowSize, curConn->DataShards, curConn->PacketSize,
                                            curConn->FECShards,
                                            reinterpret_cast<sockaddr *>(curConn->sock), curConn->sockLen, 10,
-                                           inet_addr("192.168.62.2"), curConn->ClientSeq, curConn->serverSeq);
+                                           assignedIP, curConn->ClientSeq, curConn->serverSeq);
+                    lru->AddNewNode(uuid, curConn);
                     printf("established WINDOW_SIZE %d PACKETSIZE %d DATASHARDS %d FECSHARDS %d UUID %d\n",
                            curConn->WindowSize, curConn->PacketSize, curConn->DataShards, curConn->FECShards, uuid);
                     head.Clear();
@@ -110,6 +117,27 @@ Connection *Connection::getConn(uint16_t uuid) {
     return connectionArray[uuid];
 }
 
-void Connection::RecvBuffer(uint8_t *buffer) {
+Connection *Connection::GetConnectionByIP(in_addr_t ip) {
+    auto tempUUID = IP2UUID[ip];
+    return tempUUID == 0 ? nullptr : connectionArray[tempUUID];
+}
+
+void Connection::AddData(uint8_t *buffer, uint16_t length) {
+    if (rdt->AddData(buffer, length)) {
+        lru->moveToTail(uuid);
+    }
+}
+
+void Connection::callBack() {
+    rdt->BufferTimeOut();
+}
+
+void Connection::checkTimeOut() {
+    lru->checkTimeOut();
+}
+
+void Connection::RecvBuffer(uint8_t *buffer, const sockaddr_in &addr, const socklen_t &socklen) {
     rdt->RecvBuffer(buffer);
+    *sock = addr;
+    *sockLen = socklen;
 }

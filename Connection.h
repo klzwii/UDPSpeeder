@@ -8,9 +8,13 @@
 #include "RDT.h"
 #include <atomic>
 #include "crc32c/crc32c.h"
+#include "IPPool.h"
+#include "LRULinkedList.h"
+#include <map>
+#include "LinkedNodeCallBack.h"
 
-class Connection {
-public:
+class Connection : public LinkedNodeCallBack {
+private:
     RDT *rdt;
     sockaddr_in *sock;
     socklen_t *sockLen;
@@ -24,16 +28,17 @@ public:
     uint16_t WindowSize;
     uint16_t PacketSize;
     uint8_t FECShards;
-    static Connection *connectionArray[65536];
+    uint16_t uuid;
+    static IPPool *ipPool;
+    static std::map<in_addr_t, uint16_t> IP2UUID;
+    static std::map<uint16_t, Connection *> connectionArray;
+    static LRULinkedList *lru;
 
-    static void init() {
-        bzero(connectionArray, sizeof(connectionArray));
-    }
-
-    Connection() {
+    Connection(uint16_t uuid) {
         sock = new sockaddr_in;
         sockLen = new socklen_t;
         CurrentState = CLIENT_STATE_INITIAL;
+        this->uuid = uuid;
     }
 
     ~Connection() {
@@ -42,11 +47,23 @@ public:
     }
 
 public:
+    static void init(IPPool *ipPool) {
+        Connection::ipPool = ipPool;
+    }
+
     static Connection *getConn(uint16_t uuid);
 
     static int startConn(uint8_t *buffer, sockaddr *sockAddr, const socklen_t *sockAddrLen);
 
-    void RecvBuffer(uint8_t *buffer);
+    void RecvBuffer(uint8_t *buffer, const sockaddr_in &addr, const socklen_t &socklen);
+
+    void AddData(uint8_t *buffer, uint16_t length);
+
+    static Connection *GetConnectionByIP(in_addr_t ip);
+
+    void callBack() override;
+
+    static void checkTimeOut();
 };
 
 

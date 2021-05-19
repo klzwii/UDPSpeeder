@@ -13,8 +13,10 @@
 #include "NAT.h"
 #include <linux/if.h>
 #include <sys/ioctl.h>
+#include "LRULinkedList.h"
 #include <fcntl.h>
 #include "RDT.h"
+#include "LRULinkedList.h"
 
 struct sockaddr_in structsockaddrIn{}, sout{};
 socklen_t sockLen;
@@ -46,13 +48,13 @@ int tun_alloc(char dev[IFNAMSIZ]) {
     return fd;
 }
 
-int set_stack_attribute(char *dev) {
+int set_stack_attribute(char *dev, in_addr_t ip) {
     struct ifreq ifr{};
     struct sockaddr_in addr{};
     int sockfd, err = -1;
     bzero(&addr, sizeof(addr));
     addr.sin_family = AF_INET;
-    addr.sin_addr.s_addr = inet_addr("192.168.62.1");
+    addr.sin_addr.s_addr = ip;
     bzero(&ifr, sizeof(ifr));
     strcpy(ifr.ifr_name, dev);
     bcopy(&addr, &ifr.ifr_addr, sizeof(addr));
@@ -85,28 +87,6 @@ int set_stack_attribute(char *dev) {
     return err;
 }
 
-bool checkIPOut(struct iphdr *iph) {
-    auto k = be32toh(iph->daddr);
-    auto *t = (uint8_t *) &k;
-    auto fir = *(t + 3), sec = *(t + 2);
-    if (fir == 127 || fir == 10) {
-        return false;
-    }
-    if (fir == 192 && sec == 168) {
-        return false;
-    }
-    if (fir == 169 && sec == 254) {
-        return false;
-    }
-    if (fir == 172 && sec >= 26 && sec <= 31) {
-        return false;
-    }
-    if (fir >= 224) {
-        return false;
-    }
-    return true;
-}
-
 void readFromFD() {
     uint8_t buffer[2000];
     ssize_t len;
@@ -123,9 +103,9 @@ void readFromFD() {
                 continue;
             }
         } else if (FD_ISSET(fd, &setCopy)) {
-            sockaddr tempAddr{};
+            sockaddr_in tempAddr{};
             socklen_t tempLen;
-            len = recvfrom(fd, buffer, 2000, 0, &tempAddr, &tempLen);
+            len = recvfrom(fd, buffer, 2000, 0, (sockaddr *) &tempAddr, &tempLen);
             if (len < 0) {
                 perror("recv");
                 continue;
@@ -133,20 +113,17 @@ void readFromFD() {
             auto head = header(buffer);
             auto *conn = Connection::getConn(head.UUID());
             if (head.IsACK() || head.IsSYN()) {
-                int sendBack = Connection::startConn(buffer, &tempAddr, &tempLen);
-                if (sendBack != 0) {
-                    auto ret = sendto(fd, buffer, sendBack, 0, &tempAddr, tempLen);
+                int sendBack = Connection::startConn(buffer, (sockaddr *) &tempAddr, &tempLen);
+                if (sendBack > 0) {
+                    auto ret = sendto(fd, buffer, sendBack, 0, (sockaddr *) &tempAddr, tempLen);
                     if (ret < 0) {
-                        perror("send back ret");
+                        continue;
                     } else {
                         printf("send back bytes %d\n", sendBack);
                     }
                 }
             } else if (conn != nullptr) {
-                if (rdt == nullptr) {
-                    rdt = conn->rdt;
-                }
-                conn->RecvBuffer(buffer);
+                conn->RecvBuffer(buffer, tempAddr, tempLen);
             } else {
                 printf("fatal invalid uuid\n");
                 continue;
@@ -159,6 +136,11 @@ void readFromFD() {
 
 int main() {
     // getSubnetMask();
+    auto *ipPool = IPPool::NewIPPool("192.168.62.1", 24);
+    if (ipPool == nullptr) {
+        printf("init ip pool error check input");
+        exit(-1);
+    }
     galois::initGF();
     rawFD = socket(AF_INET, SOCK_RAW, IPPROTO_RAW);
     if (rawFD < 0) {
@@ -182,7 +164,7 @@ int main() {
     char devName[IFNAMSIZ];
     bzero(devName, IFNAMSIZ);
     int hijackFD = tun_alloc(devName);
-    set_stack_attribute(devName);
+    set_stack_attribute(devName, ipPool->getIP());
     struct nfq_handle *h;
     struct nfq_q_handle *qh;
     uint8_t buf[2000];
@@ -190,19 +172,22 @@ int main() {
     FD_ZERO(&oriFD);
     FD_SET(hijackFD, &oriFD);
     timeval tv{0, 1000};
+    Connection::init(ipPool);
     std::thread(readFromFD).detach();
     while (true) {
         auto fdCopy = oriFD;
         auto tvCopy = tv;
         auto selectedFD = select(hijackFD + 1, &fdCopy, nullptr, nullptr, &tvCopy);
         if (selectedFD == 0) {
-            if (rdt != nullptr) {
-                rdt->BufferTimeOut();
-            }
+            Connection::checkTimeOut();
         } else if (FD_ISSET(hijackFD, &fdCopy)) {
             auto r = read(hijackFD, buf, 2000);
-            rdt->AddData(buf, r, true);
-            rdt->BufferTimeOut();
+            if (r > sizeof(iphdr)) {
+                auto *hdr = (iphdr *) buf;
+                auto *conn = Connection::GetConnectionByIP(hdr->daddr);
+                conn->AddData(buf, r);
+                Connection::checkTimeOut();
+            }
         } else {
             perror("select");
         }

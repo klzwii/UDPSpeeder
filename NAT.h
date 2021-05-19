@@ -24,6 +24,9 @@ public:
         bzero(UDPPort, sizeof(UDPPort));
         bzero(TCPPort, sizeof(TCPPort));
         bzero(ICMPId, sizeof(ICMPId));
+        bzero(OriICMPId, sizeof(OriICMPId));
+        bzero(OriTCPPort, sizeof(OriTCPPort));
+        bzero(OriUDPPort, sizeof(OriUDPPort));
     }
 
     uint16_t GetUUID(uint16_t port, int Type);
