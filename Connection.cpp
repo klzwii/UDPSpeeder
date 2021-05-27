@@ -10,6 +10,9 @@ std::map<uint16_t, Connection *>Connection::connectionArray;
 std::map<in_addr_t, uint16_t>Connection::IP2UUID;
 IPPool *Connection::ipPool = nullptr;
 LRULinkedList *Connection::lru = new LRULinkedList();
+std::mutex Connection::mtx;
+std::vector<RDT *> Connection::rtdVec;
+int Connection::pipeFD;
 
 bool operator==(const sockaddr_in &a, const sockaddr_in &b) {
     return a.sin_addr.s_addr == b.sin_addr.s_addr && a.sin_port == b.sin_port && a.sin_family == b.sin_family;
@@ -80,7 +83,10 @@ int Connection::startConn(uint8_t *buffer, sockaddr *sockAddr, const socklen_t *
                     curConn->rdt = new RDT(curConn->WindowSize, curConn->DataShards, curConn->PacketSize,
                                            curConn->FECShards,
                                            reinterpret_cast<sockaddr *>(curConn->sock), curConn->sockLen, 10,
-                                           assignedIP, curConn->ClientSeq, curConn->serverSeq);
+                                           assignedIP, curConn->ClientSeq, curConn->serverSeq, uuid);
+                    mtx.lock();
+                    rtdVec.push_back(curConn->rdt);
+                    mtx.unlock();
                     lru->AddNewNode(uuid, curConn);
                     printf("established WINDOW_SIZE %d PACKETSIZE %d DATASHARDS %d FECSHARDS %d UUID %d\n",
                            curConn->WindowSize, curConn->PacketSize, curConn->DataShards, curConn->FECShards, uuid);
@@ -96,7 +102,7 @@ int Connection::startConn(uint8_t *buffer, sockaddr *sockAddr, const socklen_t *
                 }
                 uint16_t serverSeqACK = curConn->serverSeq + 1;
                 if (head.IsACK()) {
-                    if (*(uint16_t *) (buffer + HEADER_LENGTH) != curConn->serverSeq + 1) {
+                    if (*(uint16_t *) (buffer + HEADER_LENGTH) != serverSeqACK) {
                         break;
                     }
                     head.Clear();

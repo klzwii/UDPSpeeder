@@ -33,7 +33,6 @@ private:
 #endif
     uint8_t **RecvBuffers;
     uint16_t SendWindowEnd;
-    uint16_t uuid = 0;
     uint8_t *sendBuffer;
     uint8_t rawBuffer[2000]{};
     uint16_t rawOffset = 0;
@@ -61,11 +60,19 @@ private:
     in_addr_t fakeIP;
     int rawSocket;
     uint16_t *PacketLength;
+
     static void reCalcChecksum(uint16_t *payLoad, size_t len);
+
 public:
+    uint16_t uuid = 0;
 #ifdef server
+    volatile uint16_t downSpeed = 0;
+    volatile uint16_t upSpeed = 0;
+
     static void init(int fd);
+
 #endif
+
     ~RDT() {
         free(sendBuffer);
         for (int i = 0; i < WINDOW_SIZE; i++) {
@@ -93,7 +100,7 @@ public:
 #ifdef server
 
     RDT(uint WINDOW_SIZE, uint BATCH_LENGTH, uint PACKET_SIZE, uint RS_LENGTH, sockaddr *sockADDR, socklen_t *sockLen,
-        uint32_t BUFFER_THRESHOLD, in_addr_t fakeIP, uint16_t clientSeq, uint16_t serverSeq)
+        uint32_t BUFFER_THRESHOLD, in_addr_t fakeIP, uint16_t clientSeq, uint16_t serverSeq, uint16_t uuid)
 #endif
     {
         if ((WINDOW_SIZE & -WINDOW_SIZE) != WINDOW_SIZE) {
@@ -132,6 +139,7 @@ public:
         buffer = reinterpret_cast<uint8_t *>(calloc(DATA_LENGTH, sizeof(uint8_t)));
         PacketLength = reinterpret_cast<uint16_t *>(calloc(WINDOW_SIZE, sizeof(uint16_t)));
         rawSocket = socket(AF_INET, SOCK_RAW, IPPROTO_RAW);
+        this->uuid = uuid;
         int val = 1;
         if (setsockopt(rawSocket, IPPROTO_IP, IP_HDRINCL, reinterpret_cast<const void *>(&val), sizeof(int))) {
             perror("setsockopt() error");

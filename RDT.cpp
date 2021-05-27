@@ -95,6 +95,7 @@ void RDT::SendBuffer() {
 #endif
 #ifdef server
         sendRet = sendto(serverFD, currentBuffer + i * SEGMENT_LENGTH, SEGMENT_LENGTH, 0, sendSockAddr, *sockLen);
+        downSpeed += offset;
 #endif
         if (sendRet < 0) {
             perror("send");
@@ -265,6 +266,7 @@ void RDT::SendRawBuffer() {
     }
     reCalcChecksum((uint16_t *) rawBuffer, sendLength);
 #ifdef server
+    upSpeed += sendLength;
     auto sendRet = sendto(rawSocket, rawBuffer, sendLength, 0, (sockaddr *) &tempSock, sizeof(sockaddr_in));
 #endif
 #ifdef client

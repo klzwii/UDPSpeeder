@@ -6,17 +6,13 @@
 #include <linux/ip.h>
 #include "HeaderConst.h"
 #include "Connection.h"
-#include <arpa/inet.h>
-#include <thread>
-#include <map>
 #include <linux/if_tun.h>
-#include "NAT.h"
 #include <linux/if.h>
 #include <sys/ioctl.h>
-#include "LRULinkedList.h"
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <cstdio>
 #include <fcntl.h>
-#include "RDT.h"
-#include "LRULinkedList.h"
 
 struct sockaddr_in structsockaddrIn{}, sout{};
 socklen_t sockLen;
@@ -135,7 +131,16 @@ void readFromFD() {
 }
 
 int main() {
-    // getSubnetMask();
+    //unlink("/tmp/UDPSpeederPipe");
+    auto ret = mkfifo("/tmp/UDPSpeederPipe", 644);
+    if (ret < 0) {
+        perror("make fifo");
+    }
+    auto pipeFD = open("/tmp/UDPSpeederPipe", O_WRONLY | O_NONBLOCK);
+    if (pipeFD < 0) {
+        perror("open pipe");
+        exit(-1);
+    }
     auto *ipPool = IPPool::NewIPPool("192.168.62.1", 24);
     if (ipPool == nullptr) {
         printf("init ip pool error check input");
@@ -172,7 +177,7 @@ int main() {
     FD_ZERO(&oriFD);
     FD_SET(hijackFD, &oriFD);
     timeval tv{0, 1000};
-    Connection::init(ipPool);
+    Connection::init(ipPool, pipeFD);
     std::thread(readFromFD).detach();
     while (true) {
         auto fdCopy = oriFD;

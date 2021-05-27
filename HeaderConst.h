@@ -7,7 +7,6 @@
 #define HEADER_LENGTH 12
 struct header {
 private:
-    static const uint8_t FIN = 0b1;
     static const uint8_t ACK = 0b10;
     static const uint8_t SYN = 0b100;
     static const uint8_t RST = 0b1000;
@@ -37,10 +36,6 @@ public:
 
     void SetSubSeq(uint8_t subSeq) {
         *reinterpret_cast<uint8_t *>(addr + 8) = subSeq;
-    }
-
-    void SetFIN() {
-        *reinterpret_cast<uint8_t *>(addr + 9) |= FIN;
     }
 
     void SetACK() {
@@ -73,10 +68,6 @@ public:
 
     uint8_t SubSeq() {
         return *reinterpret_cast<uint8_t *>(addr + 8);
-    }
-
-    bool IsFin() {
-        return *reinterpret_cast<uint8_t *>(addr + 9) & FIN;
     }
 
     bool IsACK() {
