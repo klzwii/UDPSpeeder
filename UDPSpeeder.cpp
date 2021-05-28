@@ -122,6 +122,15 @@ void readFromFD() {
                 conn->RecvBuffer(buffer, tempAddr, tempLen);
             } else {
                 printf("fatal invalid uuid\n");
+                head.Clear();
+                head.SetRST();
+                head.SetCRC(crc32c::Crc32c(buffer + 4, HEADER_LENGTH - 4));
+                auto ret = sendto(fd, buffer, HEADER_LENGTH, 0, (sockaddr *) &tempAddr, tempLen);
+                if (ret < 0) {
+                    continue;
+                } else {
+                    printf("send rst bytes\n");
+                }
                 continue;
             }
         } else {
