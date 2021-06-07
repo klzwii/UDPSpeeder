@@ -5,6 +5,7 @@
 #include <arpa/inet.h>
 #include "Connection.h"
 #include "LRULinkedList.h"
+#include "util.h"
 
 std::map<uint16_t, Connection *>Connection::connectionArray;
 std::map<in_addr_t, uint16_t>Connection::IP2UUID;
@@ -146,4 +147,46 @@ void Connection::RecvBuffer(uint8_t *buffer, const sockaddr_in &addr, const sock
     rdt->RecvBuffer(buffer);
     *sock = addr;
     *sockLen = socklen;
+}
+
+void Connection::speedWatcher() {
+    timeval curTime{};
+    while (true) {
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+        std::stringstream ss;
+        ss << "[";
+        bool c = false;
+        mtx.lock();
+        if (rtdVec.empty()) {
+            mtx.unlock();
+            continue;
+        }
+        auto iter = rtdVec.begin();
+        while (iter != rtdVec.end()) {
+            auto &i = *iter;
+            timeval lastTime{i->lastActiveTime.tv_sec, i->lastActiveTime.tv_usec};
+            gettimeofday(&curTime, nullptr);
+            if (util::timeSub(curTime, lastTime) > 60000) {
+                printf("%lld\n", util::timeSub(curTime, lastTime));
+                Connection::IP2UUID[i->fakeIP] = 0;
+                Connection::connectionArray[i->uuid] = nullptr;
+                delete i;
+                rtdVec.erase(iter);
+            } else {
+                if (c) {
+                    ss << ",";
+                }
+                ss << "{ \"uuid\":" << i->uuid << ", \"up_speed\":" << i->upSpeed << ", \"down_speed\":" << i->downSpeed
+                   << "}";
+                c = true;
+                i->upSpeed = 0;
+                i->downSpeed = 0;
+                iter++;
+            }
+        }
+        mtx.unlock();
+        ss << "]";
+        auto s = ss.str();
+        write(pipeFD, s.c_str(), s.size());
+    }
 }

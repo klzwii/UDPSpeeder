@@ -107,6 +107,10 @@ void readFromFD() {
                 continue;
             }
             auto head = header(buffer);
+            if (head.CRC() != crc32c::Crc32c(buffer + 4, len - 4)) {
+                printf("wrong crc \n");
+                continue;
+            }
             auto *conn = Connection::getConn(head.UUID());
             if (head.IsACK() || head.IsSYN()) {
                 int sendBack = Connection::startConn(buffer, (sockaddr *) &tempAddr, &tempLen);

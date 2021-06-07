@@ -7,9 +7,11 @@
 #define HEADER_LENGTH 12
 struct header {
 private:
+    static const uint8_t FIN = 0b1;
     static const uint8_t ACK = 0b10;
     static const uint8_t SYN = 0b100;
     static const uint8_t RST = 0b1000;
+    static const uint8_t HBT = 0b10000;
 //    uint32_t crc;  // 0 - 3
 //    uint16_t sendSeq; // 4 - 5
 //    uint16_t packetLength; // 6 - 7
@@ -27,15 +29,21 @@ public:
     void SetCRC(uint32_t crc) {
         *reinterpret_cast<uint32_t*>(addr) = crc;
     }
+
     void SetSendSeq(uint16_t sendSeq) {
-        *reinterpret_cast<uint16_t*>(addr + 4) = sendSeq;
+        *reinterpret_cast<uint16_t *>(addr + 4) = sendSeq;
     }
+
     void SetPacketLength(uint16_t packetLength) {
         *reinterpret_cast<uint16_t *>(addr + 6) = packetLength;
     }
 
     void SetSubSeq(uint8_t subSeq) {
         *reinterpret_cast<uint8_t *>(addr + 8) = subSeq;
+    }
+
+    void SetFIN() {
+        *reinterpret_cast<uint8_t *>(addr + 9) |= FIN;
     }
 
     void SetACK() {
@@ -48,6 +56,10 @@ public:
 
     void SetRST() {
         *reinterpret_cast<uint8_t *>(addr + 9) |= RST;
+    }
+
+    void SetHBT() {
+        *reinterpret_cast<uint8_t *>(addr + 9) |= HBT;
     }
 
     void SetUUID(uint16_t uuid) {
@@ -70,6 +82,10 @@ public:
         return *reinterpret_cast<uint8_t *>(addr + 8);
     }
 
+    bool IsFin() {
+        return *reinterpret_cast<uint8_t *>(addr + 9) & FIN;
+    }
+
     bool IsACK() {
         return *reinterpret_cast<uint8_t *>(addr + 9) & ACK;
     }
@@ -80,6 +96,10 @@ public:
 
     bool IsRST() {
         return *reinterpret_cast<uint8_t *>(addr + 9) & RST;
+    }
+
+    bool IsHBT() {
+        return *reinterpret_cast<uint8_t *>(addr + 9) & HBT;
     }
 
     uint16_t UUID() {

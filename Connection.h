@@ -53,33 +53,7 @@ private:
 
     static std::vector<RDT *> rtdVec;
 
-    static void speedWatcher() {
-        while (true) {
-            std::this_thread::sleep_for(std::chrono::seconds(1));
-            std::stringstream ss;
-            ss << "[";
-            bool c = false;
-            mtx.lock();
-            if (rtdVec.empty()) {
-                mtx.unlock();
-                continue;
-            }
-            for (auto &i : rtdVec) {
-                if (c) {
-                    ss << ",";
-                }
-                ss << "{ \"uuid\":" << i->uuid << ", \"up_speed\":" << i->upSpeed << ", \"down_speed\":" << i->downSpeed
-                   << "}";
-                c = true;
-                i->upSpeed = 0;
-                i->downSpeed = 0;
-            }
-            mtx.unlock();
-            ss << "]";
-            auto s = ss.str();
-            write(pipeFD, s.c_str(), s.size());
-        }
-    }
+    static void speedWatcher();
 
 public:
     static void init(IPPool *pool, int fd) {

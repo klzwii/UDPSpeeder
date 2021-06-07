@@ -11,6 +11,7 @@
 #include "HeaderConst.h"
 #include <thread>
 #include "RS.h"
+#include <sys/time.h>
 #include <random>
 #include <netinet/in.h>
 #include <unistd.h>
@@ -36,13 +37,13 @@ private:
     uint8_t *sendBuffer;
     uint8_t rawBuffer[2000]{};
     uint16_t rawOffset = 0;
-
     void rdtEncode(uint8_t **encodeShards, uint16_t length);
 
     bool rdtDecode(uint8_t **decodeShards, const bool *validShards, uint16_t length);
 
 #ifdef client
     int sendFD;
+    in_addr_t fakeIP;
     int hijackFD;
     std::atomic_bool threadExit{false};
     static void RecvThread(RDT *rdt);
@@ -57,7 +58,6 @@ private:
     uint SEGMENT_LENGTH;
     uint DATA_LENGTH;
     uint32_t BUFFER_THRESHOLD;
-    in_addr_t fakeIP;
     int rawSocket;
     uint16_t *PacketLength;
 
@@ -66,11 +66,11 @@ private:
 public:
     uint16_t uuid = 0;
 #ifdef server
+    in_addr_t fakeIP;
     volatile uint16_t downSpeed = 0;
     volatile uint16_t upSpeed = 0;
-
+    volatile timeval lastActiveTime;
     static void init(int fd);
-
 #endif
 
     ~RDT() {
@@ -114,6 +114,10 @@ public:
         }
         sendSockAddr = sockADDR;
         this->sockLen = sockLen;
+        timeval tempTime{};
+        gettimeofday(&tempTime, nullptr);
+        lastActiveTime.tv_usec = tempTime.tv_usec;
+        lastActiveTime.tv_sec = tempTime.tv_sec;
 #endif
         SendWindowEnd = serverSeq;
         RecvStart = clientSeq;

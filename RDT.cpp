@@ -94,6 +94,10 @@ void RDT::SendBuffer() {
         sendRet = send(sendFD, currentBuffer + i * SEGMENT_LENGTH, SEGMENT_LENGTH, 0);
 #endif
 #ifdef server
+        timeval tempTime{};
+        gettimeofday(&tempTime, nullptr);
+        lastActiveTime.tv_usec = tempTime.tv_usec;
+        lastActiveTime.tv_sec = tempTime.tv_sec;
         sendRet = sendto(serverFD, currentBuffer + i * SEGMENT_LENGTH, SEGMENT_LENGTH, 0, sendSockAddr, *sockLen);
         downSpeed += offset;
 #endif
@@ -106,8 +110,12 @@ void RDT::SendBuffer() {
 //non thread-safe
 void RDT::RecvBuffer(uint8_t *data) {
     auto head = header(data);
-    if (head.CRC() != crc32c::Crc32c(data + 4, SEGMENT_LENGTH - 4)) {
-        printf("wrong crc \n");
+    if (head.IsHBT()) {
+        printf("beat\n");
+        timeval tempTime{};
+        gettimeofday(&tempTime, nullptr);
+        lastActiveTime.tv_usec = tempTime.tv_usec;
+        lastActiveTime.tv_sec = tempTime.tv_sec;
         return;
     }
     uint16_t diff;
@@ -268,6 +276,10 @@ void RDT::SendRawBuffer() {
 #ifdef server
     upSpeed += sendLength;
     auto sendRet = sendto(rawSocket, rawBuffer, sendLength, 0, (sockaddr *) &tempSock, sizeof(sockaddr_in));
+    timeval tempTime{};
+    gettimeofday(&tempTime, nullptr);
+    lastActiveTime.tv_usec = tempTime.tv_usec;
+    lastActiveTime.tv_sec = tempTime.tv_sec;
 #endif
 #ifdef client
     auto sendRet = write(hijackFD, rawBuffer, sendLength);

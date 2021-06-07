@@ -3,19 +3,8 @@
 //
 
 #include "LRULinkedList.h"
-
+#include "util.h"
 #define BufferThreshold 10
-
-#include "Connection.h"
-
-long long operator-(const timeval &a, const timeval &b) {
-    long long t = (a.tv_sec - b.tv_sec) * 1000 + (a.tv_usec - b.tv_usec) / 1000;
-    if (t < 0) {
-        t += 60 * 60 * 24 * 1000;
-    }
-    return t;
-}
-
 LRULinkedList::LRULinkedList() {
     virtualHead = new LRULinkedListNode(-1, nullptr);
     virtualTail = new LRULinkedListNode(-1, nullptr);
@@ -54,7 +43,7 @@ void LRULinkedList::checkTimeOut() {
     timeval curTime{};
     gettimeofday(&curTime, nullptr);
     for (auto *node = virtualHead->nextNode; node != virtualTail;) {
-        if (curTime - node->lastSendTime > BufferThreshold) {
+        if (util::timeSub(curTime, node->lastSendTime) > BufferThreshold) {
             auto tempNode = node->nextNode;
             node->prevNode = nullptr;
             node->nextNode = nullptr;
